@@ -9,7 +9,6 @@
 
 namespace {
 uint32_t g_last_vpad_hold = 0;
-uint32_t g_last_kpad_hold = 0;
 uint32_t g_sampling_cb = 0;
 bool g_last_touch = false;
 
@@ -146,127 +145,12 @@ HLE_EXPORT(padscore, KPADInitEx) {}
 HLE_EXPORT(padscore, KPADGetMplsWorkSize) { RET(0x5FE0); }
 HLE_EXPORT(padscore, KPADSetMplsWorkarea) {}
 // int32 KPADReadEx(chan, KPADStatus* buf, uint32 count, int32* err)
+// We exclusively emulate the Wii U GamePad (VPAD). KPADReadEx must return
+// KPAD_READ_ERR_NO_CONTROLLER (-1) so BotW does not fight between GamePad and
+// Pro Controller, which caused alternating "controller connected" alerts and dropped inputs.
 HLE_EXPORT(padscore, KPADReadEx) {
-    const uint32_t chan = ARG(0), buf = ARG(1), count = ARG(2), err = ARG(3);
-    if (chan != 0 || !count) {
-        if (err) mem::w32(err, (uint32_t)-2);  // invalid controller / request
-        RET(0);
-        return;
-    }
-
-    // Some BotW dialogue-choice code polls the Pro Controller (KPAD) path instead of VPAD.
-    // Keep D-pad directions digital in VPAD (weapon selection/gameplay), but expose them as a
-    // Pro Controller stick here for UI lists that only navigate from analog input.
-    input::PadState s = input::gamepad();
-    float kpad_lx = s.lx, kpad_ly = s.ly;
-    if (std::abs(kpad_lx) < 0.15f)
-        kpad_lx = ((s.buttons & input::BTN_RIGHT) ? 1.0f : 0.0f) - ((s.buttons & input::BTN_LEFT) ? 1.0f : 0.0f);
-    if (std::abs(kpad_ly) < 0.15f)
-        kpad_ly = ((s.buttons & input::BTN_UP) ? 1.0f : 0.0f) - ((s.buttons & input::BTN_DOWN) ? 1.0f : 0.0f);
-    // BotW polls KPAD as a Wii U Pro Controller for its dialogue and choice UI.
-    // Mirror face buttons and shoulders here as well as in VPAD. Without this,
-    // navigation reached KPAD but confirm/cancel and the other actions vanished.
-    auto map_buttons = [](uint32_t buttons) {
-        uint32_t out = 0;
-        if (buttons & input::BTN_UP) out |= 0x00000001;
-        if (buttons & input::BTN_LEFT) out |= 0x00000002;
-        if (buttons & input::BTN_ZR) out |= 0x00000004;
-        if (buttons & input::BTN_X) out |= 0x00000008;
-        if (buttons & input::BTN_A) out |= 0x00000010;
-        if (buttons & input::BTN_Y) out |= 0x00000020;
-        if (buttons & input::BTN_B) out |= 0x00000040;
-        if (buttons & input::BTN_ZL) out |= 0x00000080;
-        if (buttons & input::BTN_R) out |= 0x00000200;
-        if (buttons & input::BTN_PLUS) out |= 0x00000400;
-        if (buttons & input::BTN_HOME) out |= 0x00000800;
-        if (buttons & input::BTN_MINUS) out |= 0x00001000;
-        if (buttons & input::BTN_L) out |= 0x00002000;
-        if (buttons & input::BTN_DOWN) out |= 0x00004000;
-        if (buttons & input::BTN_RIGHT) out |= 0x00008000;
-        if (buttons & input::BTN_STICK_R) out |= 0x00010000;
-        if (buttons & input::BTN_STICK_L) out |= 0x00020000;
-        return out;
-    };
-    uint32_t hold = map_buttons(s.buttons);
-    if (s.buttons & input::BTN_UP) hold |= 0x00000001;
-    if (s.buttons & input::BTN_LEFT) hold |= 0x00000002;
-    if (s.buttons & input::BTN_DOWN) hold |= 0x00004000;
-    if (s.buttons & input::BTN_RIGHT) hold |= 0x00008000;
-    if (kpad_lx < -0.5f) hold |= 0x00040000;
-    if (kpad_lx > 0.5f) hold |= 0x00080000;
-    if (kpad_ly > 0.5f) hold |= 0x00200000;
-    if (kpad_ly < -0.5f) hold |= 0x00100000;
-    if (s.rx < -0.5f) hold |= 0x00400000;
-    if (s.rx > 0.5f) hold |= 0x00800000;
-    if (s.ry > 0.5f) hold |= 0x02000000;
-    if (s.ry < -0.5f) hold |= 0x01000000;
-
-    uint32_t pressed = 0, released = 0;
-    auto map_edges = [](uint32_t edges) {
-        uint32_t out = 0;
-        if (edges & input::BTN_UP) out |= 0x00000001;
-        if (edges & input::BTN_LEFT) out |= 0x00000002;
-        if (edges & input::BTN_ZR) out |= 0x00000004;
-        if (edges & input::BTN_X) out |= 0x00000008;
-        if (edges & input::BTN_A) out |= 0x00000010;
-        if (edges & input::BTN_Y) out |= 0x00000020;
-        if (edges & input::BTN_B) out |= 0x00000040;
-        if (edges & input::BTN_ZL) out |= 0x00000080;
-        if (edges & input::BTN_R) out |= 0x00000200;
-        if (edges & input::BTN_PLUS) out |= 0x00000400;
-        if (edges & input::BTN_HOME) out |= 0x00000800;
-        if (edges & input::BTN_MINUS) out |= 0x00001000;
-        if (edges & input::BTN_L) out |= 0x00002000;
-        if (edges & input::BTN_DOWN) out |= 0x00004000;
-        if (edges & input::BTN_RIGHT) out |= 0x00008000;
-        if (edges & input::BTN_STICK_R) out |= 0x00010000;
-        if (edges & input::BTN_STICK_L) out |= 0x00020000;
-        if (edges & 0x10000000) out |= 0x00200000;
-        if (edges & 0x08000000) out |= 0x00100000;
-        if (edges & 0x40000000) out |= 0x00040000;
-        if (edges & 0x20000000) out |= 0x00080000;
-        if (edges & 0x01000000) out |= 0x02000000;
-        if (edges & 0x00800000) out |= 0x01000000;
-        if (edges & 0x04000000) out |= 0x00400000;
-        if (edges & 0x02000000) out |= 0x00800000;
-        return out;
-    };
-    pressed = map_edges(s.pressed);
-    released = map_edges(s.released);
-    // The D-pad direction mirrored into Pro left-stick input has its own emulated-stick edge.
-    if (s.pressed & input::BTN_UP) pressed |= 0x00200000;
-    if (s.pressed & input::BTN_DOWN) pressed |= 0x00100000;
-    if (s.pressed & input::BTN_LEFT) pressed |= 0x00040000;
-    if (s.pressed & input::BTN_RIGHT) pressed |= 0x00080000;
-    if (s.released & input::BTN_UP) released |= 0x00200000;
-    if (s.released & input::BTN_DOWN) released |= 0x00100000;
-    if (s.released & input::BTN_LEFT) released |= 0x00040000;
-    if (s.released & input::BTN_RIGHT) released |= 0x00080000;
-    if (hold != g_last_kpad_hold)
-        LOG("input probe KPAD: hold=%08x trigger=%08x release=%08x ProLeft=%d,%d", hold, pressed, released,
-            (int16_t)std::lround(kpad_lx * 2047), (int16_t)std::lround(kpad_ly * 2047));
-    g_last_kpad_hold = hold;
-
-    if (!(hold | released)) {
-        if (err) mem::w32(err, (uint32_t)-1);  // no samples
-        RET(0);
-        return;
-    }
-
-    memset(mem::host(buf), 0, 0xF0);  // sizeof KPADStatus
-    mem::w8(buf + 0x5C, 0x1F);       // WPAD_EXT_PRO_CONTROLLER
-    mem::w8(buf + 0x5F, 0x16);       // WPAD_FMT_PRO_CONTROLLER
-    mem::w32(buf + 0x60, hold);
-    mem::w32(buf + 0x64, pressed);
-    mem::w32(buf + 0x68, released);
-    // KPAD Pro Controller sticks are signed 16-bit values in [-2048, 2047], unlike VPAD's floats.
-    auto stick = [](float v) { return (uint16_t)(int16_t)std::lround(std::clamp(v, -1.0f, 1.0f) * 2047.0f); };
-    mem::w16(buf + 0x6C, stick(kpad_lx));
-    mem::w16(buf + 0x6E, stick(kpad_ly));
-    mem::w16(buf + 0x74, stick(s.rx));
-    mem::w16(buf + 0x76, stick(s.ry));
-    if (err) mem::w32(err, 0);
-    RET(1);
+    if (ARG(3)) mem::w32(ARG(3), (uint32_t)-1);  // KPAD_READ_ERR_NO_CONTROLLER
+    RET(0);
 }
 // int32 WPADProbe(chan, uint32* type)
 HLE_EXPORT(padscore, WPADProbe) {
