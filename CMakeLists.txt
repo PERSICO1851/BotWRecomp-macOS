@@ -16,6 +16,7 @@ file(GLOB GUEST_SOURCES CONFIGURE_DEPENDS
   ${CMAKE_SOURCE_DIR}/generated/huge_*.cpp
   ${CMAKE_SOURCE_DIR}/generated/table.cpp
   ${CMAKE_SOURCE_DIR}/generated/hle_stubs.cpp)
+list(FILTER GUEST_SOURCES EXCLUDE REGEX "/\\._")
 add_library(guest OBJECT ${GUEST_SOURCES})
 target_include_directories(guest PRIVATE runtime/include generated)
 target_compile_options(guest PRIVATE -O2 -gline-tables-only -w -fwrapv -fno-strict-aliasing -mcpu=apple-m1
@@ -32,7 +33,7 @@ file(GLOB_RECURSE CEMU_SOURCES CONFIGURE_DEPENDS
   ${CMAKE_SOURCE_DIR}/runtime/cemu/Cemu/FileCache/*.cpp
   ${CMAKE_SOURCE_DIR}/runtime/cemu/imgui/*.mm
   ${CMAKE_SOURCE_DIR}/runtime/cemu_shims/*.cpp ${CMAKE_SOURCE_DIR}/runtime/cemu_shims/*.mm)
-list(FILTER CEMU_SOURCES EXCLUDE REGEX "LatteOverlay\\.cpp$|/dependencies/|SystemInfo(Win|Linux|BSD)\\.cpp$")
+list(FILTER CEMU_SOURCES EXCLUDE REGEX "LatteOverlay\\.cpp$|/dependencies/|SystemInfo(Win|Linux|BSD)\\.cpp$|/\\._")
 list(APPEND CEMU_SOURCES
   ${CMAKE_SOURCE_DIR}/runtime/cemu/dependencies/imgui/imgui.cpp
   ${CMAKE_SOURCE_DIR}/runtime/cemu/dependencies/imgui/imgui_draw.cpp
@@ -40,7 +41,7 @@ list(APPEND CEMU_SOURCES
   ${CMAKE_SOURCE_DIR}/runtime/cemu/dependencies/imgui/imgui_widgets.cpp)
 add_library(cemu_gpu OBJECT ${CEMU_SOURCES})
 target_include_directories(cemu_gpu PRIVATE runtime/cemu_shims runtime/cemu runtime/cemu/Cafe
-  runtime/cemu/dependencies/metal-cpp runtime/cemu/dependencies/imgui /opt/homebrew/include)
+  runtime/cemu/dependencies/metal-cpp runtime/cemu/dependencies/imgui /opt/homebrew/include /opt/homebrew/opt/openssl@3/include)
 target_compile_definitions(cemu_gpu PRIVATE BOOST_NOWIDE_NO_LIB ENABLE_METAL BOTWRECOMP IMGUI_IMPL_METAL_CPP
   EMULATOR_VERSION_MAJOR=2 EMULATOR_VERSION_MINOR=6 EMULATOR_VERSION_PATCH=0 EMULATOR_HASH=a53cf0e)
 target_compile_options(cemu_gpu PRIVATE -w -O2 -g1 "SHELL:-include Common/precompiled.h")
@@ -48,8 +49,9 @@ target_compile_options(cemu_gpu PRIVATE -w -O2 -g1 "SHELL:-include Common/precom
 file(GLOB_RECURSE RUNTIME_SOURCES CONFIGURE_DEPENDS
   ${CMAKE_SOURCE_DIR}/runtime/src/*.cpp
   ${CMAKE_SOURCE_DIR}/runtime/src/*.mm)
+list(FILTER RUNTIME_SOURCES EXCLUDE REGEX "/\\._")
 add_executable(BotWRecomp ${RUNTIME_SOURCES} $<TARGET_OBJECTS:guest> $<TARGET_OBJECTS:cemu_gpu>)
-target_include_directories(BotWRecomp PRIVATE runtime/include runtime/src generated)
+target_include_directories(BotWRecomp PRIVATE runtime/include runtime/src generated /opt/homebrew/include /opt/homebrew/opt/openssl@3/include)
 target_compile_options(BotWRecomp PRIVATE -Wall -Wno-unused-function -Wno-unused-variable -fwrapv -mcpu=apple-m1
   $<$<COMPILE_LANGUAGE:OBJCXX>:-fobjc-arc>)
 find_package(SDL3 REQUIRED CONFIG)
