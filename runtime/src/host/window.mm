@@ -110,14 +110,38 @@ void apply_input() {
         s.ly -= ax(SDL_GetGamepadAxis(g_pad, SDL_GAMEPAD_AXIS_LEFTY));
         s.rx += ax(SDL_GetGamepadAxis(g_pad, SDL_GAMEPAD_AXIS_RIGHTX));
         s.ry -= ax(SDL_GetGamepadAxis(g_pad, SDL_GAMEPAD_AXIS_RIGHTY));
-        // layout 0, Nintendo positions: SDL "east" = Wii U A, "south" = B, "north" = X, "west" = Y.
-        // layout 1, by label (Xbox / PlayStation habit): south = A, east = B, west = X, north = Y.
-        const bool labels = g_layout == 1;
+        // Layout presets:
+        // 0: Nintendo (East = A, South = B, West = Y, North = X)
+        // 1: PlayStation (South/Cross = A, East/Circle = B, West/Square = Y [Attack], North/Triangle = X [Jump])
+        // 2: PlayStation Action (South/Cross = X [Jump], East/Circle = B [Run], West/Square = Y [Attack], North/Triangle = A [Action])
+        // 3: Xbox (South/A = A, East/B = B, West/X = Y [Attack], North/Y = X [Jump])
+        uint32_t btn_south = input::BTN_B;
+        uint32_t btn_east  = input::BTN_A;
+        uint32_t btn_west  = input::BTN_Y;
+        uint32_t btn_north = input::BTN_X;
+
+        if (g_layout == 1) {        // PlayStation Standard
+            btn_south = input::BTN_A;
+            btn_east  = input::BTN_B;
+            btn_west  = input::BTN_Y;
+            btn_north = input::BTN_X;
+        } else if (g_layout == 2) { // PlayStation Action (Cross = Jump)
+            btn_south = input::BTN_X;
+            btn_east  = input::BTN_B;
+            btn_west  = input::BTN_Y;
+            btn_north = input::BTN_A;
+        } else if (g_layout == 3) { // Xbox Standard
+            btn_south = input::BTN_A;
+            btn_east  = input::BTN_B;
+            btn_west  = input::BTN_Y;
+            btn_north = input::BTN_X;
+        }
+
         const std::pair<SDL_GamepadButton, uint32_t> btns[] = {
-            {labels ? SDL_GAMEPAD_BUTTON_SOUTH : SDL_GAMEPAD_BUTTON_EAST, input::BTN_A},
-            {labels ? SDL_GAMEPAD_BUTTON_EAST : SDL_GAMEPAD_BUTTON_SOUTH, input::BTN_B},
-            {labels ? SDL_GAMEPAD_BUTTON_WEST : SDL_GAMEPAD_BUTTON_NORTH, input::BTN_X},
-            {labels ? SDL_GAMEPAD_BUTTON_NORTH : SDL_GAMEPAD_BUTTON_WEST, input::BTN_Y},
+            {SDL_GAMEPAD_BUTTON_SOUTH, btn_south},
+            {SDL_GAMEPAD_BUTTON_EAST,  btn_east},
+            {SDL_GAMEPAD_BUTTON_WEST,  btn_west},
+            {SDL_GAMEPAD_BUTTON_NORTH, btn_north},
             {SDL_GAMEPAD_BUTTON_LEFT_SHOULDER, input::BTN_L}, {SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, input::BTN_R},
             {SDL_GAMEPAD_BUTTON_START, input::BTN_PLUS},    {SDL_GAMEPAD_BUTTON_BACK, input::BTN_MINUS},
             {SDL_GAMEPAD_BUTTON_DPAD_UP, input::BTN_UP},    {SDL_GAMEPAD_BUTTON_DPAD_DOWN, input::BTN_DOWN},
@@ -315,8 +339,8 @@ void run() {
                 auto b = (SDL_GamepadButton)e.gbutton.button;
                 bool both_sticks = (b == SDL_GAMEPAD_BUTTON_LEFT_STICK && SDL_GetGamepadButton(g_pad, SDL_GAMEPAD_BUTTON_RIGHT_STICK)) ||
                                    (b == SDL_GAMEPAD_BUTTON_RIGHT_STICK && SDL_GetGamepadButton(g_pad, SDL_GAMEPAD_BUTTON_LEFT_STICK));
-                SDL_GamepadButton confirm = g_layout == 1 ? SDL_GAMEPAD_BUTTON_SOUTH : SDL_GAMEPAD_BUTTON_EAST;
-                SDL_GamepadButton back = g_layout == 1 ? SDL_GAMEPAD_BUTTON_EAST : SDL_GAMEPAD_BUTTON_SOUTH;
+                SDL_GamepadButton confirm = (g_layout == 0) ? SDL_GAMEPAD_BUTTON_EAST : SDL_GAMEPAD_BUTTON_SOUTH;
+                SDL_GamepadButton back = (g_layout == 0) ? SDL_GAMEPAD_BUTTON_SOUTH : SDL_GAMEPAD_BUTTON_EAST;
                 if (b == SDL_GAMEPAD_BUTTON_TOUCHPAD || both_sticks) menu::toggle();
                 else if (menu::is_open()) {
                     if (b == SDL_GAMEPAD_BUTTON_DPAD_UP) menu::move(-1);

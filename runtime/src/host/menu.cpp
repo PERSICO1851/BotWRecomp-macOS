@@ -48,7 +48,7 @@ void step(Settings& s, int row, int dir) {
         case kFilter: s.filter = wrap(s.filter + dir, 4); break;
         case kGyro: s.gyro = !s.gyro; break;
         case kRumble: s.rumble = !s.rumble; break;
-        case kLayout: s.layout = !s.layout; break;
+        case kLayout: s.layout = wrap(s.layout + dir, 4); break;
         case kTouch: s.touch = wrap(s.touch + dir, 3), s.touch_hidden = false; break;
         case kShowFps: s.show_fps = !s.show_fps; break;
         case kVolume: s.volume = std::clamp(s.volume + dir * 10, 0, 100); break;
@@ -150,7 +150,13 @@ View view() {
     v.rows[kFilter] = {"Filtro Upscale", kFilters[std::clamp(s.filter, 0, 3)]};
     v.rows[kGyro] = {"Mira Giroscopio", s.gyro ? "Attivo" : "Disattivo"};
     v.rows[kRumble] = {"Vibrazione", s.rumble ? "Attivo" : "Disattivo"};
-    v.rows[kLayout] = {"Pulsanti", s.layout ? "A = Giu (Cross / Xbox A)" : "A = Destra (Circle / Xbox B)"};
+    static const char* kLayoutNames[] = {
+        "Nintendo (A=Destra, B=Giu)",
+        "PlayStation 4/5 (Croce=Azione, Quadrato=Attacco)",
+        "PlayStation Action (Croce=Salto, Quadrato=Attacco)",
+        "Xbox (A=Azione, X=Attacco, Y=Salto)"
+    };
+    v.rows[kLayout] = {"Controller", kLayoutNames[std::clamp(s.layout, 0, 3)]};
     v.rows[kTouch] = {"Controlli Touch", s.touch == 1 ? "Attivo" : s.touch == 2 ? "Disattivo" : "Auto (no pad)"};
     v.rows[kShowFps] = {"Overlay FPS", s.show_fps ? "Mostra" : "Nascondi"};
     snprintf(b, sizeof b, "%d%%", s.volume);

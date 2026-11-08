@@ -1,8 +1,10 @@
 #include "settings.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 #include <mutex>
 
 #include "audio/output.h"
@@ -17,6 +19,20 @@ namespace {
 std::mutex g_lock;
 Settings g_s;
 std::string g_path;
+
+// settings.ini is user-editable and may also have been written by an older build. Keep every
+// value inside the range understood by the menu and renderer before it is applied or saved.
+Settings normalized(Settings s) {
+    s.fps = s.fps >= 60 ? 60 : 30;
+    if (!std::isfinite(s.scale) || s.scale < 0) s.scale = 0;
+    s.scale = std::min(s.scale, 3.0f);
+    s.display = std::clamp(s.display, 0, 2);
+    s.filter = std::clamp(s.filter, 0, 3);
+    s.layout = std::clamp(s.layout, 0, 3);
+    s.volume = std::clamp(s.volume, 0, 100);
+    s.touch = std::clamp(s.touch, 0, 2);
+    return s;
+}
 
 void save_locked() {
     if (g_path.empty()) return;
@@ -48,9 +64,10 @@ void apply() {
 }
 
 void set(const Settings& s, bool save) {
+    const Settings safe = normalized(s);
     {
         std::lock_guard<std::mutex> l(g_lock);
-        g_s = s;
+        g_s = safe;
         if (save) save_locked();
     }
     apply();
@@ -82,6 +99,7 @@ void load(const std::string& path) {
             fclose(f);
             LOG("settings: %s", path.c_str());
         }
+        g_s = normalized(g_s);
     }
     apply();
 }
