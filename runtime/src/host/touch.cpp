@@ -219,8 +219,20 @@ void stick_to(float x, float y) {  // the base follows a thumb that leaves the r
 
 input::PadState contribution(float dt) {
     input::PadState t;
-    for (auto& f : g.fingers)
-        if (f.role == kCtrl) t.buttons |= g.ctrls[f.ctrl].dpad ? f.dir : g.ctrls[f.ctrl].mask;
+    for (auto& f : g.fingers) {
+        if (f.role != kCtrl) continue;
+        if (!g.ctrls[f.ctrl].dpad) {
+            t.buttons |= g.ctrls[f.ctrl].mask;
+            continue;
+        }
+        // BotW dialogue choices respond to the left stick, not only the D-pad. Keep the digital
+        // direction for gameplay shortcuts while also making the on-screen arrows navigate choices.
+        t.buttons |= f.dir;
+        if (f.dir & input::BTN_LEFT) t.lx -= 1;
+        if (f.dir & input::BTN_RIGHT) t.lx += 1;
+        if (f.dir & input::BTN_UP) t.ly += 1;
+        if (f.dir & input::BTN_DOWN) t.ly -= 1;
+    }
     if (g.stick) {
         float vx = (g.kx - g.bx) / g.stick_r, vy = (g.ky - g.by) / g.stick_r, m = hypotf(vx, vy);
         if (m > kStickDead) {

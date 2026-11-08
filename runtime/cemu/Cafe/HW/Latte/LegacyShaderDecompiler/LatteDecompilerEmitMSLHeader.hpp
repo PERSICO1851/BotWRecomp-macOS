@@ -511,10 +511,30 @@ namespace LatteDecompiler
     			}
 
     			uint32 binding = shaderContext->output->resourceMappingMTL.textureUnitToBindingPoint[i];
-    			//uint32 textureBinding = shaderContext->output->resourceMappingMTL.textureUnitToBindingPoint[i] % 31;
-    			//uint32 samplerBinding = textureBinding % 16;
+				// Metal has separate texture and sampler namespaces. A sampler can
+				// be shared by several texture units, so declare each sampler slot once.
+				uint32 samplerBinding = shaderContext->shader->textureUnitSamplerAssignment[i];
+				if (samplerBinding == LATTE_DECOMPILER_SAMPLER_NONE)
+					samplerBinding = 0;
     			src->addFmt(" tex{} [[texture({})]]", i, binding);
-    			src->addFmt(", sampler samplr{} [[sampler({})]]", i, binding);
+				bool samplerAlreadyDeclared = false;
+				for (sint32 previous = 0; previous < i; previous++)
+				{
+					if (!shaderContext->output->textureUnitMask[previous])
+						continue;
+					if (static_cast<MetalRenderer*>(g_renderer.get())->SupportsFramebufferFetch() && shaderContext->shader->textureRenderTargetIndex[previous] != 255)
+						continue;
+					uint32 previousSampler = shaderContext->shader->textureUnitSamplerAssignment[previous];
+					if (previousSampler == LATTE_DECOMPILER_SAMPLER_NONE)
+						previousSampler = 0;
+					if (previousSampler == samplerBinding)
+					{
+						samplerAlreadyDeclared = true;
+						break;
+					}
+				}
+				if (!samplerAlreadyDeclared)
+					src->addFmt(", sampler samplr{} [[sampler({})]]", samplerBinding, samplerBinding);
 			}
 		}
 	}

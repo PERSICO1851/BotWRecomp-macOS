@@ -38,7 +38,9 @@ void LatteOverlay_render(bool padView) {
     if (padView) return;
     ImGuiIO& io = ImGui::GetIO();
     io.IniFilename = nullptr;
-    const float ui = std::max(1.0f, io.DisplaySize.y / 540.0f);
+    // ImGui's drawable is in backing pixels on Retina displays. Scaling directly from 540 px made
+    // the menu enormous on 4K displays; cap the UI scale while retaining readable text everywhere.
+    const float ui = std::clamp(io.DisplaySize.y / 900.0f, 0.85f, 1.35f);
 
     float px, py;
     bool down;
@@ -50,7 +52,7 @@ void LatteOverlay_render(bool padView) {
                                      ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
                                      ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoMove;
 
-    // --- Modern Sleek FPS Counter Pill ---
+    // Compact performance pill.
     if (settings::get().show_fps) {
         float sl, st, sr, sb;
         menu::safe_area(&sl, &st, &sr, &sb);
@@ -77,7 +79,7 @@ void LatteOverlay_render(bool padView) {
                              (cur_fps >= 35.0f) ? ImVec4(1.00f, 0.82f, 0.20f, 1.0f) :
                                                   ImVec4(1.00f, 0.35f, 0.35f, 1.0f);
             ImGui::PushStyleColor(ImGuiCol_Text, dot_col);
-            ImGui::TextUnformatted("●");
+            ImGui::TextUnformatted(cur_fps >= 57.0f ? "OK" : cur_fps >= 35.0f ? "MID" : "LOW");
             ImGui::PopStyleColor();
             ImGui::SameLine(0, 6 * ui);
             ImGui::Text("%.0f FPS", (double)cur_fps);
@@ -95,7 +97,7 @@ void LatteOverlay_render(bool padView) {
     if (!v.open) touch::draw();
     if (!v.open) return;
 
-    // --- Modern Glassmorphic In-Game Settings Menu ---
+    // Compact Sheikah-style settings panel.
     ImGui::SetNextWindowPos({io.DisplaySize.x * 0.5f, io.DisplaySize.y * 0.5f}, ImGuiCond_Always, {0.5f, 0.5f});
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 16.0f * ui);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24.0f * ui, 20.0f * ui));
@@ -115,7 +117,7 @@ void LatteOverlay_render(bool padView) {
 
         // Header Title
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.85f, 0.35f, 1.0f));  // Gold accent
-        ImGui::TextUnformatted("✦  THE LEGEND OF ZELDA: BOTW  ✦");
+        ImGui::TextUnformatted("BOTW  /  IMPOSTAZIONI");
         ImGui::PopStyleColor();
 
         // Close button (X) top right
@@ -123,14 +125,14 @@ void LatteOverlay_render(bool padView) {
         ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetStyle().WindowPadding.x - xs);
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.35f, 0.15f, 0.18f, 0.8f));
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.65f, 0.20f, 0.25f, 1.0f));
-        if (ImGui::Button("✕", {xs, xs})) menu::close();
+        if (ImGui::Button("X", {xs, xs})) menu::close();
         ImGui::PopStyleColor(2);
 
         const ImVec2 xa = ImGui::GetItemRectMin(), xb = ImGui::GetItemRectMax();
 
         ImGui::SetWindowFontScale(ui * 0.95f);
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.55f, 0.75f, 0.95f, 0.80f));
-        ImGui::TextUnformatted("Configurazione Sistema & Grafica (Metal Engine)");
+        ImGui::TextUnformatted("Schermo, prestazioni e controlli");
         ImGui::PopStyleColor();
         ImGui::Separator();
 
@@ -145,9 +147,9 @@ void LatteOverlay_render(bool padView) {
         };
 
         for (int i = 0; i < (int)v.rows.size(); i++) {
-            if (i == 0) render_section_header("SCHERMO & PERFORMANCE", "⚡");
-            else if (i == 4) render_section_header("CONTROLLI & FEEDBACK", "🎮");
-            else if (i == 7) render_section_header("AUDIO & INTERFACCIA", "🔊");
+            if (i == 0) render_section_header("SCHERMO E PRESTAZIONI", "01");
+            else if (i == 4) render_section_header("CONTROLLI", "02");
+            else if (i == 7) render_section_header("AUDIO E INTERFACCIA", "03");
             else if (i == 10) {
                 ImGui::Spacing();
                 ImGui::Separator();
@@ -175,7 +177,7 @@ void LatteOverlay_render(bool padView) {
             if (!r.action) {
                 ImGui::SameLine();
                 const float btn_sz = ImGui::GetFrameHeight();
-                if (ImGui::Button("◀", {btn_sz, btn_sz})) menu::click(i, -1);
+                if (ImGui::Button("<", {btn_sz, btn_sz})) menu::click(i, -1);
 
                 ImGui::SameLine();
                 // Value pill
@@ -184,7 +186,7 @@ void LatteOverlay_render(bool padView) {
                 ImGui::PopStyleColor();
 
                 ImGui::SameLine(label_w + value_w + 24 * ui);
-                if (ImGui::Button("▶", {btn_sz, btn_sz})) menu::click(i, +1);
+                if (ImGui::Button(">", {btn_sz, btn_sz})) menu::click(i, +1);
             }
 
             ImGui::PopStyleColor(2);
@@ -199,7 +201,7 @@ void LatteOverlay_render(bool padView) {
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.60f, 0.70f, 0.80f, 0.9f));
         ImGui::TextUnformatted(v.note.c_str());
         ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.60f, 0.75f, 0.85f));
-        ImGui::TextUnformatted("Comandi:  D-pad / Frecce: Scegli/Modifica  |  A / Spazio: Seleziona  |  F1 / B: Chiudi");
+        ImGui::TextUnformatted("D-pad / frecce: naviga   A / Invio: conferma   B / F1 / Esc: chiudi");
         ImGui::PopStyleColor(2);
 
         // Touch bounding boxes

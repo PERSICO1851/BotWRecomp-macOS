@@ -16,6 +16,7 @@ __pycache__/
 
 # App icon: bring your own (see README).
 ios/assets/Assets.xcassets/AppIcon.appiconset/*.png
+!ios/assets/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png
 
 # Game files and keys, in case one is copied in by accident.
 /game/

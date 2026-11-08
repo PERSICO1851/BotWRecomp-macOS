@@ -12,7 +12,10 @@ enum : uint32_t {
 };
 struct PadState {
     uint32_t buttons = 0;
+    uint32_t pressed = 0, released = 0;  // edges for the current host sample; stable across guest reads
     float lx = 0, ly = 0, rx = 0, ry = 0;  // -1..1, +y = up
+    float touch_x = 0, touch_y = 0;         // normalized GamePad touch position, top-left origin
+    bool touch_down = false;
 };
 PadState gamepad();               // current state (thread-safe snapshot)
 void set_gamepad(const PadState&);  // from the host event loop / test script

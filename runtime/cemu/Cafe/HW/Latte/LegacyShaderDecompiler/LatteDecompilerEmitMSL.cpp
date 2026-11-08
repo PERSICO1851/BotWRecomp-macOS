@@ -2312,12 +2312,18 @@ static void _emitTEXSampleTextureCode(LatteDecompilerShaderContext* shaderContex
                     src->add("sample");
            	    if (isCompare)
          			src->add("_compare");
-          		src->addFmt("(samplr{}, ", texInstruction->textureFetch.textureIndex);
+				uint32 samplerIndex = shaderContext->shader->textureUnitSamplerAssignment[texInstruction->textureFetch.textureIndex];
+				if (samplerIndex == LATTE_DECOMPILER_SAMPLER_NONE)
+					samplerIndex = 0;
+				src->addFmt("(samplr{}, ", samplerIndex);
            	}
     	}
     	else
     	{
-    	    src->addFmt(", samplr{}, ", texInstruction->textureFetch.textureIndex);
+			uint32 samplerIndex = shaderContext->shader->textureUnitSamplerAssignment[texInstruction->textureFetch.textureIndex];
+			if (samplerIndex == LATTE_DECOMPILER_SAMPLER_NONE)
+				samplerIndex = 0;
+			src->addFmt(", samplr{}, ", samplerIndex);
     	}
 
     	// for textureGather() add shift (todo: depends on rounding mode set in sampler registers?)
@@ -2708,7 +2714,10 @@ static void _emitTEXGetCompTexLodCode(LatteDecompilerShaderContext* shaderContex
 	}
 	else
 	{
-		src->addFmt("float lod = tex{}.calculate_unclamped_lod(samplr{}, ", textureIndex, textureIndex);
+		uint32 samplerIndex = shaderContext->shader->textureUnitSamplerAssignment[textureIndex];
+		if (samplerIndex == LATTE_DECOMPILER_SAMPLER_NONE)
+			samplerIndex = 0;
+		src->addFmt("float lod = tex{}.calculate_unclamped_lod(samplr{}, ", textureIndex, samplerIndex);
 		if (components > 1)
 			src->addFmt("float{}(", components);
 		for (sint32 i = 0; i < components; ++i)

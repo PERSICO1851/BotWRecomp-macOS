@@ -19,11 +19,43 @@ of play (the cause is not known yet), so expect that. Nothing else has been test
 no iPad.
 
 **Mac.** Plays with keyboard or a controller (DualSense, with gyro aiming). On an M1 Pro: 60 fps in
-menus, 24-35 fps in the open world at the default render scale (about 2.4x).
+menus, 24-35 fps in the open world at the former Auto scale (about 2.4x). New settings now default
+to 1.5x (1080p) to reduce GPU load; 60 FPS is the game's target and demanding scenes can still fall
+below it. Existing `settings.ini` files keep their chosen resolution. Set `scale=1.5` there, or pick
+1.5x in the in-game menu and restart, to use the performance-oriented resolution.
 
 Known gaps: the iPhone hang above; the app keeps sending GPU work when it goes to the background;
 shaders compile on first use, so the first run hitches; DLC is untested. Details for iOS are in
 [`ios/PORTING.md`](ios/PORTING.md).
+
+### Known problems and debugging notes
+
+The following issues were observed during testing on one Mac build. They are not claims that every
+Mac or save file will show the same behavior. A fix is called out as verified only when the behavior
+was reproduced again after the change.
+
+| Area | Observed behavior | Current status / next check |
+| --- | --- | --- |
+| Water and graphics | Water has appeared white. Other scenes have also shown washed-out cyan/pink colors and texture-like corruption. | **Unresolved.** The native Metal renderer and texture/sampler binding path are under investigation. A sampler binding change is present, but has not been shown to fix the water. Capture the same water scene before and after each renderer change. |
+| Dialog choices | Arrow keys and controller D-pad work elsewhere, but do not move the selection between dialogue lines. Confirm/A works in some prompts. | **Unresolved.** Verify which VPAD/KPAD channel the dialogue choice code polls and log the choice state while a dialogue is open. Keyboard arrow navigation must not also move Link during this screen. |
+| Keyboard focus | Some earlier input attempts were sent while Terminal or another app had focus. | Check that the game window is frontmost before drawing conclusions from a failed input test. There were duplicate game processes during one session; test with a single process. |
+| Mouse / touch | Mouse clicks did not interact with the game world. | **Unresolved / unsupported path.** The host touch-to-pointer bridge exists, but a click alone is not proof of Wii U GamePad touch support; verify coordinates, touch-down/up lifetime, and the guest's VPAD touch state. |
+| Frame rate | One run was around 26–28 FPS at a higher render scale; after setting `scale=1.0` and restarting a single process, the overlay reported about 60 FPS. | Resolution affects GPU load. 60 FPS is an observed result in that scene, not a guarantee for the open world or every Mac. |
+| Crashes / stalls | Earlier runs crashed or stopped accepting input at particular points; input testing also used scripted A presses to advance one scene. | **Not fully characterized.** Keep the runtime log and note the exact scene, save, renderer, scale, and whether the process exited or merely stopped responding. |
+| First-run stutter | Shaders compile on first use. | Expected; revisit the same area after shader compilation before comparing frame pacing. |
+
+The macOS build uses Cemu's Latte GPU layer with its native Metal renderer. Do not apply an
+OpenGL-only workaround to this build without checking the active renderer. In particular, the Cemu
+BotW compatibility notes associate the old white-water workaround with `GX2DrawDone()` on OpenGL;
+that alone does not establish a fix for Metal. The Metal resource-binding change in this repository
+addresses separate Metal texture and sampler binding slots, but white water remains an open issue.
+The render-target self-dependency/accurate-barrier code in the Metal renderer is currently disabled;
+it is a candidate for investigation, not a verified fix. See the [Cemu Metal binding report](https://github.com/cemu-project/Cemu/issues/2038)
+and the [BotW compatibility notes](https://wiki.cemu.info/wiki/ALZP01).
+
+When reporting or debugging one of these problems, include the Mac model/chip, macOS version,
+renderer, render scale, game/update version, the exact location or dialogue, and a screenshot or
+runtime log. Change one graphics or input setting at a time so the result can be compared.
 
 ## What you need
 
@@ -108,8 +140,8 @@ With a free Apple ID the app stops opening after 7 days. Run `ios/scripts/provis
 `ios/scripts/build.sh iphoneos` and `ios/scripts/device.sh install` again; the game files and saves
 stay on the phone. `ios/scripts/device.sh log` fetches the runtime log.
 
-To add an app icon, put a 1024x1024 PNG at
-`ios/assets/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png` before building.
+The app uses a minimal gold Triforce mark on a dark green background. Regenerate its 1024x1024 PNG
+with `swift tools/make_macos_icon.swift ios/assets/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png`.
 
 ## Build for Mac
 
@@ -120,7 +152,9 @@ cmake -B build -G Ninja && ninja -C build
 BOTW_GAME=/path/to/game tools/play.sh
 ```
 
-F11 toggles fullscreen. F1, L3+R3 or the DualSense touchpad opens the settings menu. `--fps 30` and
+F11 toggles fullscreen. WASD or the arrow keys move Link; the arrow keys also send D-pad input.
+E or Enter confirms, Left Shift cancels, and P opens the in-game `+` menu. F1, L3+R3 or the
+DualSense touchpad opens the settings menu. `--fps 30` and
 `--scale 1` give the original frame rate and resolution. Saves and settings are kept in
 `~/Library/Application Support/BotWRecomp`.
 

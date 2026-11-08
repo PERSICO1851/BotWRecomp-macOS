@@ -144,7 +144,7 @@ View view() {
     Settings s = settings::get();
     char b[128];
     v.rows.resize(kRows);
-    v.rows[kFps] = {"Frame rate", s.fps >= 60 ? "60 FPS (Sbloccato)" : "30 FPS (Originale)"};
+    v.rows[kFps] = {"Obiettivo frame rate", s.fps >= 60 ? "60 FPS" : "30 FPS (originale)"};
     v.rows[kScale] = {"Risoluzione", scale_text(s.scale)};
     v.rows[kDisplay] = {"Proporzioni", kDisplays[std::clamp(s.display, 0, 2)]};
     v.rows[kFilter] = {"Filtro Upscale", kFilters[std::clamp(s.filter, 0, 3)]};

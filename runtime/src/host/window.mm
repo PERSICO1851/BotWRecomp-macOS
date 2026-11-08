@@ -34,8 +34,13 @@ SDL_Gamepad* g_pad = nullptr;
 bool g_use_gyro = true;  // --no-gyro / settings
 bool g_use_rumble = true;
 bool g_background = false;  // iOS app lifecycle
-int g_layout = 0;  // 0: A = right face button (Nintendo positions), 1: A = bottom face button (labels)
+int g_layout = 0;  // controller face-button preset (Nintendo, PlayStation, PlayStation Action, Xbox)
 std::atomic<int> g_draw_w{1280}, g_draw_h{720};
+float g_touch_x = 0, g_touch_y = 0;
+bool g_touch_down = false;
+bool g_mouse_left_held = false;
+bool g_touch_release_pending = false;
+uint32_t g_mouse_nav_buttons = 0;
 
 // keyboard -> GamePad
 struct KeyMap {
@@ -45,7 +50,8 @@ struct KeyMap {
 const KeyMap kKeys[] = {
     {SDL_SCANCODE_E, input::BTN_A},      {SDL_SCANCODE_LSHIFT, input::BTN_B}, {SDL_SCANCODE_SPACE, input::BTN_X},
     {SDL_SCANCODE_F, input::BTN_Y},      {SDL_SCANCODE_Q, input::BTN_ZL},     {SDL_SCANCODE_R, input::BTN_ZR},
-    {SDL_SCANCODE_1, input::BTN_L},      {SDL_SCANCODE_3, input::BTN_R},      {SDL_SCANCODE_RETURN, input::BTN_PLUS},
+    {SDL_SCANCODE_1, input::BTN_L},      {SDL_SCANCODE_3, input::BTN_R},      {SDL_SCANCODE_RETURN, input::BTN_A},
+    {SDL_SCANCODE_P, input::BTN_PLUS},
     {SDL_SCANCODE_TAB, input::BTN_MINUS}, {SDL_SCANCODE_UP, input::BTN_UP},    {SDL_SCANCODE_DOWN, input::BTN_DOWN},
     {SDL_SCANCODE_LEFT, input::BTN_LEFT}, {SDL_SCANCODE_RIGHT, input::BTN_RIGHT}, {SDL_SCANCODE_C, input::BTN_STICK_L},
     {SDL_SCANCODE_V, input::BTN_STICK_R},
@@ -90,11 +96,22 @@ void update_safe_area() {
 }
 
 void apply_input() {
+    static uint64_t scriptFrame = 0;
     input::PadState s;
     const bool* keys = SDL_GetKeyboardState(nullptr);
     if (g_win && (SDL_GetWindowFlags(g_win) & SDL_WINDOW_INPUT_FOCUS)) {
-        for (auto& k : kKeys)
-            if (keys[k.sc]) s.buttons |= k.button;
+        const bool dialogue_nav = keys[SDL_SCANCODE_LALT] || keys[SDL_SCANCODE_RALT];
+        for (auto& k : kKeys) {
+            const bool direction = k.button == input::BTN_UP || k.button == input::BTN_DOWN ||
+                                   k.button == input::BTN_LEFT || k.button == input::BTN_RIGHT;
+            if (keys[k.sc] && !(dialogue_nav && direction)) s.buttons |= k.button;
+        }
+        // Alt/Option + arrows is an explicit analog navigation layer for dialogue lists.
+        // Plain arrows remain D-pad only so they cannot walk Link or steal weapon-menu input.
+        if (dialogue_nav) {
+            s.lx += (keys[SDL_SCANCODE_RIGHT] ? 1.0f : 0.0f) - (keys[SDL_SCANCODE_LEFT] ? 1.0f : 0.0f);
+            s.ly += (keys[SDL_SCANCODE_UP] ? 1.0f : 0.0f) - (keys[SDL_SCANCODE_DOWN] ? 1.0f : 0.0f);
+        }
         if (keys[SDL_SCANCODE_A]) s.lx -= 1;
         if (keys[SDL_SCANCODE_D]) s.lx += 1;
         if (keys[SDL_SCANCODE_W]) s.ly += 1;
@@ -154,6 +171,12 @@ void apply_input() {
         if (SDL_GetGamepadAxis(g_pad, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER) > 16000) s.buttons |= input::BTN_ZR;
     }
     touch::apply(s);  // on-screen controls (s is cleared below while the menu is open)
+    s.buttons |= g_mouse_nav_buttons;
+    s.touch_x = g_touch_x;
+    s.touch_y = g_touch_y;
+    s.touch_down = g_touch_down;
+    // A desktop click is also a one-frame confirm; VPAD touch alone is ignored by some game UI.
+    if (g_touch_down) s.buttons |= input::BTN_A;
     if (menu::is_open()) {  // the menu owns the controls; the game sees nothing pressed
         s = input::PadState{};
         if (g_pad) {  // left stick navigates the menu
@@ -169,7 +192,8 @@ void apply_input() {
     // scripted input
     {
         std::lock_guard<std::mutex> l(g_script_lock);
-        uint64_t f = g_frame;
+        const uint64_t renderedFrame = g_frame.load();
+        uint64_t f = renderedFrame ? renderedFrame : ++scriptFrame;
         for (auto it = g_script.begin(); it != g_script.end();) {
             if (it->frame > f) {
                 ++it;
@@ -185,8 +209,11 @@ void apply_input() {
                 else if (it->a == "right") menu::change(+1);
                 else if (it->a == "ok") menu::activate();
             }
-            else if (it->kind == "key" || it->kind == "hold")
+            else if (it->kind == "key" || it->kind == "hold") {
+                LOG("input script: %s at frame %llu for %d frames", it->a.c_str(),
+                    (unsigned long long)f, it->frames);
                 g_active.push_back({button_by_name(it->a), 0, 0, 0, 0, f + (uint64_t)it->frames});
+            }
             else if (it->kind == "stick")
                 g_active.push_back({0, it->a == "l" ? it->x : 0, it->a == "l" ? it->y : 0, it->a == "r" ? it->x : 0,
                                     it->a == "r" ? it->y : 0, f + (uint64_t)it->frames});
@@ -210,6 +237,13 @@ void apply_input() {
     s.rx = std::clamp(s.rx, -1.f, 1.f);
     s.ry = std::clamp(s.ry, -1.f, 1.f);
     input::set_gamepad(s);
+    g_mouse_nav_buttons = 0;
+    // SDL may deliver a complete click (down + up) in one event-poll batch. Keep the touch
+    // asserted until after this frame has published it to VPAD, then release it on the next one.
+    if (g_touch_release_pending) {
+        g_touch_down = g_mouse_left_held;
+        g_touch_release_pending = false;
+    }
 }
 }  // namespace
 
@@ -310,6 +344,21 @@ void run() {
     while (!g_quit) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat &&
+                (e.key.scancode == SDL_SCANCODE_UP || e.key.scancode == SDL_SCANCODE_DOWN ||
+                 e.key.scancode == SDL_SCANCODE_LEFT || e.key.scancode == SDL_SCANCODE_RIGHT))
+                LOG("input probe key: %s scancode=%d", SDL_GetScancodeName(e.key.scancode), (int)e.key.scancode);
+            if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_LEFT)
+                LOG("input probe mouse: left click at %.0f,%.0f", e.button.x, e.button.y);
+            if (e.type == SDL_EVENT_MOUSE_WHEEL) {
+                float wx = e.wheel.x, wy = e.wheel.y;
+                if (e.wheel.direction == SDL_MOUSEWHEEL_FLIPPED) wx = -wx, wy = -wy;
+                if (wy > 0) g_mouse_nav_buttons |= input::BTN_UP;
+                if (wy < 0) g_mouse_nav_buttons |= input::BTN_DOWN;
+                if (wx > 0) g_mouse_nav_buttons |= input::BTN_RIGHT;
+                if (wx < 0) g_mouse_nav_buttons |= input::BTN_LEFT;
+                LOG("input probe mouse: wheel %.1f,%.1f -> %08x", wx, wy, g_mouse_nav_buttons);
+            }
             if (e.type == SDL_EVENT_QUIT) g_quit = true;
             else if (e.type == SDL_EVENT_DID_ENTER_BACKGROUND || e.type == SDL_EVENT_WILL_ENTER_FOREGROUND) {
                 g_background = e.type == SDL_EVENT_DID_ENTER_BACKGROUND;
@@ -353,6 +402,13 @@ void run() {
             } else if (e.type == SDL_EVENT_KEY_DOWN && (e.key.key == SDLK_F1 || (menu::is_open() && !e.key.repeat))) {
                 switch (e.key.key) {
                     case SDLK_F1: menu::toggle(); break;
+                    case SDLK_F11: {
+                        if (g_win) {
+                            bool fs = SDL_GetWindowFlags(g_win) & SDL_WINDOW_FULLSCREEN;
+                            SDL_SetWindowFullscreen(g_win, !fs);
+                        }
+                        break;
+                    }
                     case SDLK_ESCAPE: menu::close(); break;
                     case SDLK_UP: menu::move(-1); break;
                     case SDLK_DOWN: menu::move(+1); break;
@@ -372,6 +428,27 @@ void run() {
                 bool down = e.type == SDL_EVENT_MOUSE_MOTION ? (e.motion.state & SDL_BUTTON_LMASK) != 0
                                                              : e.type == SDL_EVENT_MOUSE_BUTTON_DOWN;
                 menu::pointer(mx * density, my * density, down);
+                if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN && e.button.button == SDL_BUTTON_LEFT) {
+                    g_mouse_left_held = true;
+                    g_touch_down = true;
+                    g_touch_release_pending = false;
+                }
+                if (e.type == SDL_EVENT_MOUSE_BUTTON_UP && e.button.button == SDL_BUTTON_LEFT) {
+                    g_mouse_left_held = false;
+                    g_touch_release_pending = true;
+                }
+                if (e.type == SDL_EVENT_MOUSE_MOTION) {
+                    g_mouse_left_held = (e.motion.state & SDL_BUTTON_LMASK) != 0;
+                    if (g_mouse_left_held) {
+                        g_touch_down = true;
+                        g_touch_release_pending = false;
+                    } else if (!g_touch_release_pending) {
+                        g_touch_down = false;
+                    }
+                }
+                const int tw = std::max(1, g_draw_w.load()), th = std::max(1, g_draw_h.load());
+                g_touch_x = std::clamp(mx * density / tw, 0.0f, 1.0f);
+                g_touch_y = std::clamp(my * density / th, 0.0f, 1.0f);
             } else if (e.type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED) {
                 g_draw_w = e.window.data1;
                 g_draw_h = e.window.data2;

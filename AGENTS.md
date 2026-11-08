@@ -1,0 +1,85 @@
+# Agent notes for BotWRecomp-macOS
+
+This repository is an unofficial macOS/iOS native port of Breath of the Wild. The game files are
+user-provided and are not part of the repository. macOS rendering currently goes through Cemu's
+Latte GPU layer and its Metal renderer. Keep claims about device compatibility and fixes tied to
+what has actually been reproduced.
+
+## User's current goal
+
+Improve the Mac build and keep the work reviewable and documented. The user has asked for broad
+autonomous debugging and in-game verification. They have repeatedly emphasized that input problems
+must be investigated in the active game and that debugging should continue instead of stopping at
+the first obstacle. Be direct, give short progress updates in Italian, and do not make the user
+repeat setup details already present here.
+
+## Current test setup and observations
+
+- Workspace: `/Volumes/T7/BotWRecomp`.
+- Game folder used for local runs: `/Volumes/T7/game`.
+- Local executable: `build/BotWRecomp`.
+- User config: `~/Library/Application Support/BotWRecomp/settings.ini`.
+- The config was set to `scale=1.0`. One process rendered at about 60 FPS in the tested scene; a
+  previous run at a higher scale was around 26–28 FPS. Do not assume 60 FPS throughout the open
+  world.
+- Duplicate game processes caused confusing input/performance observations before; test with one
+  running process and confirm the game window has focus.
+- Dialogue navigation remains unresolved: keyboard arrows and controller D-pad work in general
+  gameplay but have not moved the dialogue choice selection. Confirm/A can advance some prompts.
+- A scripted A input was observed arriving through both KPAD Pro and VPAD and advanced a scene.
+  This verifies that particular A path, not dialogue arrow navigation.
+- Mouse clicks did not interact with the game world. The touch/pointer bridge needs validation in
+  guest VPAD state; do not claim mouse touch support is fixed without an in-game check.
+- Water has been reported as white. This remains unresolved. One screenshot also showed a cyan/pink,
+  washed-out cinematic scene, but it did not isolate the water surface; treat it as a graphics
+  symptom to reproduce, not a diagnosed cause.
+- Previous crashes/stalls and input failures were reported at particular game moments. Record the
+  exact scene, whether the process exited or hung, and preserve the runtime log when investigating.
+
+## Renderer investigation
+
+- `runtime/cemu/Cafe/HW/Latte/LegacyShaderDecompiler/LatteDecompilerEmitMSLHeader.hpp`,
+  `LatteDecompilerEmitMSL.cpp`, and `runtime/cemu/Cafe/HW/Latte/Renderer/Metal/MetalRenderer.cpp`
+  contain local changes to separate Metal texture slots from sampler slots. This was motivated by
+  [Cemu issue #2038](https://github.com/cemu-project/Cemu/issues/2038), which describes BotW
+  shaders using more than 16 textures while remaining within the sampler limit. The change is not
+  verified as a fix for white water.
+- The Metal render-target self-dependency / accurate-barrier block and
+  `CheckIfRenderPassNeedsFlush` implementation in `MetalRenderer.cpp` are commented out. The block
+  includes special cases labelled for BotW lava and waterfall foam. It is a lead for investigation,
+  not an established safe fix; inspect why it was disabled and test carefully before enabling it.
+- Do not apply an OpenGL-only `GX2DrawDone()` workaround to native Metal without checking the
+  backend semantics. The Cemu [BotW compatibility notes](https://wiki.cemu.info/wiki/ALZP01)
+  mention that workaround in the OpenGL context.
+- The Metal synchronized ring allocator already clears its remembered command-buffer pointer when
+  a command buffer finishes. Do not reapply that fix blindly; inspect the current allocator first.
+
+## Work already in the working tree
+
+Before changing or resetting anything, inspect `git status`. At the time these notes were written,
+the user's uncommitted work included:
+
+- Metal texture/sampler binding changes.
+- Keyboard/controller input and KPAD changes, touch/pointer handling, and window/menu work.
+- In-game menu, settings and overlay changes.
+- H.264 runtime support (`runtime/src/misc/h264_hle.cpp`).
+- Mac app icon assets and helper scripts.
+- README updates and `tools/play.sh` changes.
+
+Preserve all of this unless the user explicitly asks to discard it. Do not reset, clean, or overwrite
+the user's changes. Check whether the current executable was rebuilt after source changes before
+testing it. The user has asked to push all project changes; when doing so, inspect staged/untracked
+files, commit them together as requested, and report the resulting commit and push status.
+
+## Verification guidance
+
+- The user explicitly asked for in-game debugging and testing; running the game and verifying the
+  reported behavior is authorized. Do not add unrelated automated tests unless asked.
+- Keep one process running. Confirm focus before keyboard input. A Terminal window taking focus can
+  make an input patch look broken when no event reaches the game.
+- For graphics comparisons, use the same save/location, resolution scale, renderer and camera view.
+  Capture a scene with an unmistakable water surface; a cinematic with bright haze is not sufficient
+  to diagnose white water.
+- Report what was actually verified, what remains uncertain, and the source or code path behind any
+  hypothesis. Do not call a candidate fix complete until the same repro is checked again.
+- Keep README status aligned with observed behavior and clearly label unresolved issues.
