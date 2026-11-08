@@ -11,6 +11,10 @@ fi
 BOTW_BUNDLE_ID="${BOTW_BUNDLE_ID:-com.$(id -un | tr 'A-Z' 'a-z' | tr -cd 'a-z0-9-').BotWRecomp}"
 BOTW_IOS_DEPS="${BOTW_IOS_DEPS:-$ROOT/ios-deps}"
 BOTW_GAME="${BOTW_GAME:-$ROOT/../game}"
+if [ -z "${BOTW_HOMEBREW_PREFIX:-}" ] && command -v brew >/dev/null 2>&1; then
+  BOTW_HOMEBREW_PREFIX="$(brew --prefix)"
+fi
+BOTW_HOMEBREW_PREFIX="${BOTW_HOMEBREW_PREFIX:-}"
 
 botw_team() {
   if [ -n "${BOTW_TEAM:-}" ]; then

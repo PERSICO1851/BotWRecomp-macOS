@@ -15,8 +15,8 @@ repeat setup details already present here.
 
 ## Current test setup and observations
 
-- Workspace: `/Volumes/T7/BotWRecomp`.
-- Game folder used for local runs: `/Volumes/T7/game`.
+- Use paths relative to the checkout in scripts and docs. The game folder is external and should be
+  selected with `BOTW_GAME` or a documented command argument.
 - Local executable: `build/BotWRecomp`.
 - User config: `~/Library/Application Support/BotWRecomp/settings.ini`.
 - The config was set to `scale=1.0`. One process rendered at about 60 FPS in the tested scene; a
@@ -83,3 +83,9 @@ files, commit them together as requested, and report the resulting commit and pu
 - Report what was actually verified, what remains uncertain, and the source or code path behind any
   hypothesis. Do not call a candidate fix complete until the same repro is checked again.
 - Keep README status aligned with observed behavior and clearly label unresolved issues.
+- macOS CMake, the iOS build and the standalone shader tools should discover Homebrew with
+  `brew --prefix`; do not add a hard-coded package-manager or developer-volume path. The all-in-one Mac
+  builder packages the runtime binary inside `dist/BotWRecomp.app` and resolves the user's game path
+  at first launch. Its deployment target follows the build host by default because Homebrew binary
+  libraries can require newer macOS versions; only override it when every linked library supports
+  the requested minimum.

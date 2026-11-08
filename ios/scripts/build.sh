@@ -10,6 +10,7 @@ B="$ROOT/build-ios/$SDK"
 [ -d "$BOTW_IOS_DEPS/prefix-$SDK" ] || "$ROOT/ios/scripts/build_deps.sh" "$SDK"
 cmake -S "$ROOT/ios" -B "$B" -G Ninja -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT="$SDK" \
   -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=18.0 \
-  -DBOTW_BUNDLE_ID="$BOTW_BUNDLE_ID" -DBOTW_IOS_DEPS="$BOTW_IOS_DEPS" >/dev/null
+  -DBOTW_BUNDLE_ID="$BOTW_BUNDLE_ID" -DBOTW_IOS_DEPS="$BOTW_IOS_DEPS" \
+  -DBOTW_HOMEBREW_PREFIX="$BOTW_HOMEBREW_PREFIX" >/dev/null
 nice -n 10 cmake --build "$B" -j "${BOTW_IOS_JOBS:-6}"
 "$ROOT/ios/scripts/sign.sh" "$SDK"

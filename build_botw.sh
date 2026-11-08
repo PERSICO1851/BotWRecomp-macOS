@@ -23,11 +23,13 @@ if [ "$ARCH" != "arm64" ]; then
 fi
 
 # 2. Controllo Homebrew e dipendenze
-export PATH="/opt/homebrew/bin:$PATH"
 if ! command -v brew >/dev/null 2>&1; then
-    echo "❌ Errore: Homebrew non trovato in /opt/homebrew. Installalo da https://brew.sh"
+    echo "❌ Errore: Homebrew non trovato nel PATH. Installalo da https://brew.sh"
     exit 1
 fi
+BREW_PREFIX="$(brew --prefix)"
+export PATH="$BREW_PREFIX/bin:$PATH"
+MACOS_TARGET="${BOTW_MACOS_DEPLOYMENT_TARGET:-$(sw_vers -productVersion)}"
 
 echo "🔍 Controllo delle dipendenze di sistema..."
 DEPS=(cmake ninja uv sdl3 fmt boost glm libpng openssl@3 zstd)
@@ -91,27 +93,33 @@ echo "⚙️  1/3: Ricompilazione statica PowerPC -> C++ nativo (recompile.py)..
 cd "$REPO_DIR"
 uv run python -I tools/recompile.py "$RPX_PATH" generated
 
-# 5. Pulizia file AppleDouble se su filesystem FAT/exFAT
-find "$REPO_DIR" -name "._*" -delete 2>/dev/null || true
-
-# 6. Compilazione del binario nativo
+# 5. Compilazione del binario nativo. CMake filters AppleDouble files from its source globs.
 echo ""
 echo "🔨 2/3: Compilazione con CMake e Ninja..."
-cmake -B build -G Ninja
+cmake -B build -G Ninja -DCMAKE_PREFIX_PATH="$BREW_PREFIX" -DBOTW_HOMEBREW_PREFIX="$BREW_PREFIX" \
+    -DCMAKE_OSX_DEPLOYMENT_TARGET="$MACOS_TARGET"
 ninja -C build
 
-# 7. Creazione del pacchetto .app
+# 6. Creazione del pacchetto .app
 echo ""
 echo "📦 3/3: Creazione dell'applicazione nativa per macOS..."
-OUTPUT_APP="/Applications/The Legend of Zelda - Breath of the Wild.app"
-rm -rf "$OUTPUT_APP"
+OUTPUT_APP="${BOTW_APP_OUTPUT:-$REPO_DIR/dist/BotWRecomp.app}"
 mkdir -p "$OUTPUT_APP/Contents/MacOS"
 mkdir -p "$OUTPUT_APP/Contents/Resources"
 
-# Icona
-if [ -f "/tmp/AppIcon.icns" ]; then
-    cp /tmp/AppIcon.icns "$OUTPUT_APP/Contents/Resources/AppIcon.icns"
-fi
+# Build an iconset from the repository's source PNG, then package it as ICNS.
+ICON_TMP="$REPO_DIR/build/macos-icon"
+mkdir -p "$ICON_TMP/iconset"
+swift "$REPO_DIR/tools/make_macos_icon.swift" "$ICON_TMP/icon.png"
+sips -z 16 16 "$ICON_TMP/icon.png" --out "$ICON_TMP/iconset/icon_16x16.png" >/dev/null
+sips -z 32 32 "$ICON_TMP/icon.png" --out "$ICON_TMP/iconset/icon_32x32.png" >/dev/null
+sips -z 64 64 "$ICON_TMP/icon.png" --out "$ICON_TMP/iconset/icon_64x64.png" >/dev/null
+sips -z 128 128 "$ICON_TMP/icon.png" --out "$ICON_TMP/iconset/icon_128x128.png" >/dev/null
+sips -z 256 256 "$ICON_TMP/icon.png" --out "$ICON_TMP/iconset/icon_256x256.png" >/dev/null
+sips -z 512 512 "$ICON_TMP/icon.png" --out "$ICON_TMP/iconset/icon_512x512.png" >/dev/null
+cp "$ICON_TMP/icon.png" "$ICON_TMP/iconset/icon_512x512@2x.png"
+python3 "$REPO_DIR/tools/make_macos_icns.py" "$ICON_TMP/iconset" "$OUTPUT_APP/Contents/Resources/AppIcon.icns"
+cp "$REPO_DIR/build/BotWRecomp" "$OUTPUT_APP/Contents/MacOS/BotWRecomp-runtime"
 
 cat << 'PLIST_EOF' > "$OUTPUT_APP/Contents/Info.plist"
 <?xml version="1.0" encoding="UTF-8"?>
@@ -121,15 +129,15 @@ cat << 'PLIST_EOF' > "$OUTPUT_APP/Contents/Info.plist"
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>ZeldaBotW</string>
+    <string>BotWRecomp</string>
     <key>CFBundleIconFile</key>
     <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
-    <string>com.nintendo.zelda.botw.recomp</string>
+    <string>com.botwrecomp.mac</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Zelda BotW</string>
+    <string>BotWRecomp</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -137,20 +145,36 @@ cat << 'PLIST_EOF' > "$OUTPUT_APP/Contents/Info.plist"
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>LSMinimumSystemVersion</key>
-    <string>13.3</string>
+    <string>__MACOS_MIN_VERSION__</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 </dict>
 </plist>
 PLIST_EOF
+/usr/bin/sed -i '' "s/__MACOS_MIN_VERSION__/$MACOS_TARGET/" "$OUTPUT_APP/Contents/Info.plist"
 
-cat << LAUNCH_EOF > "$OUTPUT_APP/Contents/MacOS/ZeldaBotW"
-#!/bin/zsh
-export PATH="/opt/homebrew/bin:\$PATH"
-exec "$REPO_DIR/build/BotWRecomp" --game "$GAME_PATH" "\$@"
+cat << 'LAUNCH_EOF' > "$OUTPUT_APP/Contents/MacOS/BotWRecomp"
+#!/bin/bash
+set -e
+APP_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
+SUPPORT_DIR="$HOME/Library/Application Support/BotWRecomp"
+GAME_PATH="${BOTW_GAME:-}"
+if [ -z "$GAME_PATH" ] && [ -f "$SUPPORT_DIR/game_path" ]; then
+    IFS= read -r GAME_PATH < "$SUPPORT_DIR/game_path"
+fi
+if [ -z "$GAME_PATH" ] || [ ! -f "$GAME_PATH/code/U-King.rpx" ]; then
+    if [ -f "$APP_DIR/../../game/code/U-King.rpx" ]; then
+        GAME_PATH="$APP_DIR/../../game"
+    else
+        GAME_PATH="$(/usr/bin/osascript -e 'POSIX path of (choose folder with prompt "Select your legally obtained BotW game folder (code, content, meta)")')"
+    fi
+    mkdir -p "$SUPPORT_DIR"
+    printf '%s\n' "$GAME_PATH" > "$SUPPORT_DIR/game_path"
+fi
+exec "$APP_DIR/Contents/MacOS/BotWRecomp-runtime" --game "$GAME_PATH" "$@"
 LAUNCH_EOF
 
-chmod +x "$OUTPUT_APP/Contents/MacOS/ZeldaBotW"
+chmod +x "$OUTPUT_APP/Contents/MacOS/BotWRecomp"
 xattr -cr "$OUTPUT_APP" 2>/dev/null || true
 
 echo ""

@@ -28,6 +28,14 @@ else()
 endif()
 set(BOTW_BUNDLE_ID "com.example.BotWRecomp" CACHE STRING "CFBundleIdentifier (build.sh passes BOTW_BUNDLE_ID)")
 set(BOTW_IOS_DEPS "${ROOT}/ios-deps" CACHE PATH "ios/scripts/build_deps.sh output")
+set(BOTW_HOMEBREW_PREFIX "$ENV{HOMEBREW_PREFIX}" CACHE PATH "Homebrew installation prefix")
+if(NOT BOTW_HOMEBREW_PREFIX)
+  find_program(BOTW_BREW_EXECUTABLE brew)
+  if(BOTW_BREW_EXECUTABLE)
+    execute_process(COMMAND "${BOTW_BREW_EXECUTABLE}" --prefix
+      OUTPUT_VARIABLE BOTW_HOMEBREW_PREFIX OUTPUT_STRIP_TRAILING_WHITESPACE)
+  endif()
+endif()
 set(DEPS ${BOTW_IOS_DEPS}/prefix-${BOTW_SDK})
 
 # deps live outside the SDK sysroot, which the iOS platform module restricts find_package to
@@ -73,7 +81,8 @@ add_library(cemu_gpu OBJECT ${CEMU_SOURCES})
 target_include_directories(cemu_gpu PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/compat
   ${ROOT}/runtime/cemu_shims ${ROOT}/runtime/cemu ${ROOT}/runtime/cemu/Cafe
   ${ROOT}/runtime/cemu/dependencies/metal-cpp ${ROOT}/runtime/cemu/dependencies/imgui
-  /opt/homebrew/opt/boost/include /opt/homebrew/opt/glm/include)
+  ${BOTW_HOMEBREW_PREFIX}/include ${BOTW_HOMEBREW_PREFIX}/opt/boost/include
+  ${BOTW_HOMEBREW_PREFIX}/opt/glm/include)
 target_link_libraries(cemu_gpu PRIVATE fmt::fmt zstd::libzstd_static)
 target_compile_definitions(cemu_gpu PRIVATE BOOST_NOWIDE_NO_LIB ENABLE_METAL BOTWRECOMP IMGUI_IMPL_METAL_CPP
   EMULATOR_VERSION_MAJOR=2 EMULATOR_VERSION_MINOR=6 EMULATOR_VERSION_PATCH=0 EMULATOR_HASH=a53cf0e)

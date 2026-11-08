@@ -23,7 +23,7 @@ headers), build output in `build-ios/`, third-party sources/builds in `ios-deps/
 | Platform macros | Cemu `Common/platform.h`, `precompiled.h` (bswap, thread names, timers) | `BOOST_OS_MACOS`, which boost.predef sets to 0 on iOS | `ios/compat/botw_ios_platform.h` (force-included first) maps `BOOST_OS_MACOS` to `BOOST_OS_IOS` |
 | OpenSSL | `FetchShader.cpp` (SHA-1 via EVP), `MetalPipelineCache.cpp` (SHA256) | Homebrew libcrypto.dylib | `ios/compat/openssl/{sha,evp}.h` over CommonCrypto (identical digests, no libcrypto) |
 | libpng | `Renderer.cpp` includes `<png.h>` | Homebrew header, nothing called | empty `ios/compat/png.h` |
-| boost / glm | `precompiled.h` etc. | `/opt/homebrew/include` (also exposes SDL/fmt/openssl headers) | only the header-only boost and glm kegs (`/opt/homebrew/opt/{boost,glm}/include`) |
+| boost / glm | `precompiled.h` etc. | Homebrew's active prefix (`brew --prefix`), resolved by the build scripts | header-only boost and glm headers under that prefix |
 | SDL3, fmt, zstd | link line | Homebrew dylibs | static iOS builds from pinned sources (`ios/scripts/build_deps.sh`: SDL3 3.4.18, fmt 12.2.0, zstd 1.5.7, SHA-256 checked) |
 | zlib | loader, zlib125, serializers | system libz | system libz (in the iOS SDK) |
 | Frameworks | link line | AppKit | UIKit, GameController, AVFoundation, AudioToolbox (+ SDL's: CoreHaptics, CoreMotion, CoreBluetooth, OpenGLES) |

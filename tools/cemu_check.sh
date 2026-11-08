@@ -2,9 +2,10 @@
 # Syntax-check the vendored Cemu sources (runtime/cemu) with the shims; print the first error of each
 # failing file, then a summary of missing include files.
 cd "$(dirname "$0")/.."
+BREW_PREFIX="$(brew --prefix)"
 OUT=build/cemu_check; mkdir -p $OUT; rm -f $OUT/*.err
 FLAGS=(-std=c++20 -fsyntax-only -w -Iruntime/cemu_shims -Iruntime/cemu -Iruntime/cemu/Cafe -Iruntime/cemu/dependencies/metal-cpp -Iruntime/cemu/dependencies/imgui -DEMULATOR_VERSION_MAJOR=2 -DEMULATOR_VERSION_MINOR=6 -DEMULATOR_VERSION_PATCH=0 -DEMULATOR_HASH=a53cf0e
-       -I/opt/homebrew/include -DBOOST_NOWIDE_NO_LIB -DENABLE_METAL -DBOTWRECOMP -include Common/precompiled.h)
+       -I"$BREW_PREFIX/include" -DBOOST_NOWIDE_NO_LIB -DENABLE_METAL -DBOTWRECOMP -include Common/precompiled.h)
 files=(${(f)"$( (find runtime/cemu -name '*.cpp' -o -name '*.mm' | grep -v '/dependencies/' | grep -v 'LatteOverlay.cpp\|EmitGLSL' ; ls runtime/cemu_shims/*.cpp) | sort)"})
 [[ -n "$1" ]] && files=(${(f)"$(printf '%s\n' $files | grep -E "$1")"})
 for f in $files; do

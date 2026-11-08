@@ -95,8 +95,8 @@ elsewhere, set `BOTW_GAME=/path/to/game`.
 
 ```bash
 brew install cmake ninja uv boost glm
-git clone https://github.com/IshaanKalra2103/BotWRecomp
-cd BotWRecomp
+git clone https://github.com/PERSICO1851/BotWRecomp-macOS.git
+cd BotWRecomp-macOS
 
 # 1. Recompile your copy of the game to C++ (writes generated/, about a minute)
 uv run python -I tools/recompile.py /path/to/game/code/U-King.rpx generated
@@ -148,9 +148,19 @@ with `swift tools/make_macos_icon.swift ios/assets/Assets.xcassets/AppIcon.appic
 ```bash
 brew install cmake ninja uv sdl3 fmt openssl@3 zstd boost glm libpng
 uv run python -I tools/recompile.py /path/to/game/code/U-King.rpx generated
-cmake -B build -G Ninja && ninja -C build
+cmake -B build -G Ninja -DCMAKE_PREFIX_PATH="$(brew --prefix)" && ninja -C build
 BOTW_GAME=/path/to/game tools/play.sh
 ```
+
+Or use `./build_botw.sh /path/to/game` to recompile, build and create `dist/BotWRecomp.app`.
+The app asks for the game folder on first launch (unless it is beside the checkout in `game/` or
+provided as `BOTW_GAME`) and remembers the selected folder in your user Application Support data.
+The build script discovers the active Homebrew prefix. It targets the macOS version of the build
+machine by default, matching the installed Homebrew libraries; set `BOTW_MACOS_DEPLOYMENT_TARGET`
+only when all linked libraries support that older target. Set `BOTW_APP_OUTPUT` to choose another
+app bundle output path. To assemble a folder from separate
+base-game, update and optional DLC dumps, run
+`./setup_game.sh /path/to/base /path/to/update-v208 /path/to/game [path/to/dlc]`.
 
 F11 toggles fullscreen. WASD or the arrow keys move Link; the arrow keys also send D-pad input.
 E or Enter confirms, Left Shift cancels, and P opens the in-game `+` menu. F1, L3+R3 or the

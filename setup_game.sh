@@ -1,27 +1,47 @@
 #!/bin/bash
-set -e
+# Assemble a game folder from user-provided base/update dumps. Optional fourth argument is DLC.
+set -euo pipefail
 
-SRC_GAME="/Volumes/T7/Applications/The Legend of Zelda Breath of the Wild [Game] [00050000101c9500]"
-SRC_UPDATE="/Volumes/T7/Applications/The Legend of Zelda Breath of the Wild [Update] [0005000e101c9500]"
-SRC_DLC="/Volumes/T7/Applications/The Legend of Zelda Breath of the Wild [DLC] [0005000c101c9500]"
-DEST="/Volumes/T7/game"
+usage() {
+  echo "Usage: $0 <base-game-folder> <update-v208-folder> <destination> [dlc-folder]" >&2
+  echo "Each source folder must contain code/, content/ and meta/." >&2
+  exit 2
+}
 
-echo "=== Creazione cartella $DEST ==="
-mkdir -p "$DEST"
+[ "$#" -ge 3 ] && [ "$#" -le 4 ] || usage
+SRC_GAME="$1"
+SRC_UPDATE="$2"
+DEST="$3"
+SRC_DLC="${4:-}"
 
-echo "1/3: Copia del gioco base..."
-rsync -a --exclude="._*" "$SRC_GAME/code" "$SRC_GAME/content" "$SRC_GAME/meta" "$DEST/"
+check_game_folder() {
+  local path="$1" label="$2"
+  for dir in code content meta; do
+    if [ ! -d "$path/$dir" ]; then
+      echo "$label is missing $dir/: $path" >&2
+      exit 1
+    fi
+  done
+}
 
-echo "2/3: Applicazione aggiornamento v208 (sovrascrittura)..."
-rsync -a --exclude="._*" "$SRC_UPDATE/code" "$SRC_UPDATE/content" "$SRC_UPDATE/meta" "$DEST/"
-
-if [ -d "$SRC_DLC/content" ]; then
-    echo "3/3: Configurazione DLC in $DEST/aoc..."
-    mkdir -p "$DEST/aoc"
-    rsync -a --exclude="._*" "$SRC_DLC/content/" "$DEST/aoc/"
+check_game_folder "$SRC_GAME" "Base game"
+check_game_folder "$SRC_UPDATE" "Update"
+if [ -n "$SRC_DLC" ] && [ ! -d "$SRC_DLC/content" ]; then
+  echo "DLC folder is missing content/: $SRC_DLC" >&2
+  exit 1
 fi
 
-# Pulizia di eventuali file sidecar ._*
-find "$DEST" -name "._*" -delete 2>/dev/null || true
+mkdir -p "$DEST"
+echo "Copying base game to $DEST..."
+rsync -a --exclude='._*' "$SRC_GAME/code" "$SRC_GAME/content" "$SRC_GAME/meta" "$DEST/"
+echo "Applying update by overlaying v208 files..."
+rsync -a --exclude='._*' "$SRC_UPDATE/code" "$SRC_UPDATE/content" "$SRC_UPDATE/meta" "$DEST/"
 
-echo "=== COMPLETATO CON SUCCESSO! ==="
+if [ -n "$SRC_DLC" ]; then
+  echo "Copying DLC content..."
+  mkdir -p "$DEST/aoc"
+  rsync -a --exclude='._*' "$SRC_DLC/content/" "$DEST/aoc/"
+fi
+
+find "$DEST" -name '._*' -delete 2>/dev/null || true
+echo "Game folder ready: $DEST"
