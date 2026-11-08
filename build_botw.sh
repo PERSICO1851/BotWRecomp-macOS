@@ -108,9 +108,14 @@ mkdir -p "$OUTPUT_APP/Contents/MacOS"
 mkdir -p "$OUTPUT_APP/Contents/Resources"
 
 # Build an iconset from the repository's source PNG, then package it as ICNS.
+ICON_SRC="$REPO_DIR/ios/assets/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png"
 ICON_TMP="$REPO_DIR/build/macos-icon"
 mkdir -p "$ICON_TMP/iconset"
-swift "$REPO_DIR/tools/make_macos_icon.swift" "$ICON_TMP/icon.png"
+if [ -f "$ICON_SRC" ]; then
+    cp "$ICON_SRC" "$ICON_TMP/icon.png"
+else
+    swift "$REPO_DIR/tools/make_macos_icon.swift" "$ICON_TMP/icon.png"
+fi
 sips -z 16 16 "$ICON_TMP/icon.png" --out "$ICON_TMP/iconset/icon_16x16.png" >/dev/null
 sips -z 32 32 "$ICON_TMP/icon.png" --out "$ICON_TMP/iconset/icon_32x32.png" >/dev/null
 sips -z 64 64 "$ICON_TMP/icon.png" --out "$ICON_TMP/iconset/icon_64x64.png" >/dev/null
