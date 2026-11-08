@@ -556,8 +556,8 @@ void MetalRenderer::Flush(bool waitIdle)
 
 void MetalRenderer::NotifyLatteCommandProcessorIdle()
 {
-    //if (m_commitOnIdle)
-    //    CommitCommandBuffer();
+    if (m_recordedDrawcalls > 0)
+        CommitCommandBuffer();
 }
 
 bool MetalRenderer::ImguiBegin(bool mainWindow)
@@ -1005,8 +1005,54 @@ void MetalRenderer::surfaceCopy_copySurfaceWithFormatConversion(LatteTexture* so
 	sint32 effectiveCopyWidth = width;
 	sint32 effectiveCopyHeight = height;
 	LatteTexture_scaleToEffectiveSize(sourceTexture, &effectiveCopyWidth, &effectiveCopyHeight, 0);
-	//sint32 sourceEffectiveWidth, sourceEffectiveHeight;
-	//sourceTexture->GetEffectiveSize(sourceEffectiveWidth, sourceEffectiveHeight, srcMip);
+
+    auto srcMtl = static_cast<LatteTextureMtl*>(sourceTexture);
+    auto dstMtl = static_cast<LatteTextureMtl*>(destinationTexture);
+    if (!srcMtl || !dstMtl || !srcMtl->GetTexture() || !dstMtl->GetTexture())
+        return;
+
+    // Depth-to-color format conversion (crucial for water refraction, foam, and post-processing)
+    if (sourceTexture->isDepth && !destinationTexture->isDepth)
+    {
+        EndEncoding();
+
+        auto renderPassDescriptor = MTL::RenderPassDescriptor::alloc()->init();
+        auto colorAttachment = renderPassDescriptor->colorAttachments()->object(0);
+        colorAttachment->setTexture(dstMtl->GetTexture());
+        colorAttachment->setLevel(dstMip);
+        colorAttachment->setSlice(dstSlice);
+        colorAttachment->setLoadAction(MTL::LoadActionDontCare);
+        colorAttachment->setStoreAction(MTL::StoreActionStore);
+
+        MTL::PixelFormat colorPixelFormat = dstMtl->GetTexture()->pixelFormat();
+        auto& pipeline = m_copyDepthToColorPipelines[colorPixelFormat];
+        if (!pipeline)
+        {
+            m_copyDepthToColorDesc->colorAttachments()->object(0)->setPixelFormat(colorPixelFormat);
+            NS::Error* error = nullptr;
+            pipeline = m_device->newRenderPipelineState(m_copyDepthToColorDesc, &error);
+            if (error)
+            {
+                cemuLog_log(LogType::Force, "failed to create copy depth to color pipeline (error: {})", error->localizedDescription()->utf8String());
+            }
+        }
+
+        auto renderCommandEncoder = GetTemporaryRenderCommandEncoder(renderPassDescriptor);
+        renderPassDescriptor->release();
+
+        if (pipeline)
+        {
+            renderCommandEncoder->setRenderPipelineState(pipeline);
+            renderCommandEncoder->setViewport(MTL::Viewport{0.0, 0.0, (double)effectiveCopyWidth, (double)effectiveCopyHeight, 0.0, 1.0});
+            renderCommandEncoder->setScissorRect(MTL::ScissorRect{0, 0, (uint32)effectiveCopyWidth, (uint32)effectiveCopyHeight});
+            renderCommandEncoder->setFragmentTexture(srcMtl->GetTexture(), GET_HELPER_TEXTURE_BINDING(0));
+            sint32 vpWidth = effectiveCopyWidth;
+            renderCommandEncoder->setFragmentBytes(&vpWidth, sizeof(sint32), GET_HELPER_BUFFER_BINDING(0));
+            renderCommandEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(3));
+        }
+        EndEncoding();
+        return;
+    }
 
     texture_copyImageSubData(sourceTexture, srcMip, 0, 0, srcSlice, destinationTexture, dstMip, 0, 0, dstSlice, effectiveCopyWidth, effectiveCopyHeight, 1);
 }

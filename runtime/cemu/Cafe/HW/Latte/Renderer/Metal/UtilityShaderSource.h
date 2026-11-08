@@ -35,7 +35,8 @@ vertex void vertexCopyBufferToBuffer(uint vid [[vertex_id]], device uint8_t* src
 }
 
 fragment float4 fragmentCopyDepthToColor(VertexOut in [[stage_in]], texture2d<float, access::read> src [[texture(GET_TEXTURE_BINDING(0))]]) {
-    return float4(src.read(uint2(in.position.xy)).r, 0.0, 0.0, 0.0);
+    float d = src.read(uint2(in.position.xy)).r;
+    return float4(d, d, d, 1.0);
 }
 
 //struct RestrideParams {

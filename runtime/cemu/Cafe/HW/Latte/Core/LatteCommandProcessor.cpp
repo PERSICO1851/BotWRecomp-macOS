@@ -616,6 +616,8 @@ LatteCMDPtr LatteCP_itEventWriteEOP(LatteCMDPtr cmd, uint32 nWords)
 	{
 		// todo - timestamp interrupt
 	}
+	if (g_renderer)
+		g_renderer->Flush(false);
 	TCL::TCLGPUNotifyNewRetirementTimestamp();
 	return cmd;
 }
