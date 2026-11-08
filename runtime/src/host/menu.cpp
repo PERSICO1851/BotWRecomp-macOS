@@ -17,14 +17,19 @@ std::atomic<bool> g_open{false};
 int g_cursor = 0;
 
 enum RowId { kFps, kScale, kDisplay, kFilter, kGyro, kRumble, kLayout, kTouch, kShowFps, kVolume, kClose, kRows };
-const float kScales[] = {0, 0.5f, 0.75f, 1, 1.5f, 2, 2.5f, 3};  // 0 = fit the display
+const float kScales[] = {0, 0.5f, 0.75f, 1, 1.25f, 1.5f, 2, 2.5f, 3};  // 0 = fit the display
 const char* kDisplays[] = {"Fit 16:9", "Stretch", "Fill (crop)"};
-const char* kFilters[] = {"Bilinear", "Bicubic", "Hermite", "Nearest"};
+const char* kFilters[] = {"Bilinear", "Bicubic (Sharp)", "Hermite", "Nearest"};
 
 std::string scale_text(float s) {
     char b[64];
-    if (s <= 0) return "Auto (fit the display)";
-    snprintf(b, sizeof b, "%gx  (%dx%d)", s, (int)lroundf(1280 * s), (int)lroundf(720 * s));
+    if (s <= 0) return "Auto (Schermo intero)";
+    if (fabsf(s - 1.0f) < 0.01f) return "1.0x (720p - Max FPS)";
+    if (fabsf(s - 1.25f) < 0.01f) return "1.25x (900p - Bilanciato)";
+    if (fabsf(s - 1.5f) < 0.01f) return "1.5x (1080p - Alta Qualità)";
+    if (fabsf(s - 2.0f) < 0.01f) return "2.0x (1440p 2K Ultra)";
+    if (fabsf(s - 3.0f) < 0.01f) return "3.0x (2160p 4K Retina)";
+    snprintf(b, sizeof b, "%.2gx  (%dx%d)", s, (int)lroundf(1280 * s), (int)lroundf(720 * s));
     return b;
 }
 
@@ -137,21 +142,21 @@ View view() {
         v.cursor = g_cursor;
     }
     Settings s = settings::get();
-    char b[64];
+    char b[128];
     v.rows.resize(kRows);
-    v.rows[kFps] = {"Frame rate", s.fps >= 60 ? "60 fps" : "30 fps (original)"};
-    v.rows[kScale] = {"Resolution", scale_text(s.scale)};
-    v.rows[kDisplay] = {"Aspect", kDisplays[std::clamp(s.display, 0, 2)]};
-    v.rows[kFilter] = {"Upscale filter", kFilters[std::clamp(s.filter, 0, 3)]};
-    v.rows[kGyro] = {"Gyro aiming", s.gyro ? "On" : "Off"};
-    v.rows[kRumble] = {"Rumble", s.rumble ? "On" : "Off"};
-    v.rows[kLayout] = {"Buttons", s.layout ? "A = bottom (Cross / Xbox A)" : "A = right (Circle / Xbox B)"};
-    v.rows[kTouch] = {"Touch controls", s.touch == 1 ? "On" : s.touch == 2 ? "Off" : "Auto (no controller)"};
-    v.rows[kShowFps] = {"FPS counter", s.show_fps ? "On" : "Off"};
+    v.rows[kFps] = {"Frame rate", s.fps >= 60 ? "60 FPS (Sbloccato)" : "30 FPS (Originale)"};
+    v.rows[kScale] = {"Risoluzione", scale_text(s.scale)};
+    v.rows[kDisplay] = {"Proporzioni", kDisplays[std::clamp(s.display, 0, 2)]};
+    v.rows[kFilter] = {"Filtro Upscale", kFilters[std::clamp(s.filter, 0, 3)]};
+    v.rows[kGyro] = {"Mira Giroscopio", s.gyro ? "Attivo" : "Disattivo"};
+    v.rows[kRumble] = {"Vibrazione", s.rumble ? "Attivo" : "Disattivo"};
+    v.rows[kLayout] = {"Pulsanti", s.layout ? "A = Giu (Cross / Xbox A)" : "A = Destra (Circle / Xbox B)"};
+    v.rows[kTouch] = {"Controlli Touch", s.touch == 1 ? "Attivo" : s.touch == 2 ? "Disattivo" : "Auto (no pad)"};
+    v.rows[kShowFps] = {"Overlay FPS", s.show_fps ? "Mostra" : "Nascondi"};
     snprintf(b, sizeof b, "%d%%", s.volume);
-    v.rows[kVolume] = {"Volume", b};
-    v.rows[kClose] = {"Close", "", true};
-    snprintf(b, sizeof b, "Rendering at %gx now; resolution changes apply after a restart.", g_render_scale);
+    v.rows[kVolume] = {"Volume Audio", b};
+    v.rows[kClose] = {"Chiudi Menu", "", true};
+    snprintf(b, sizeof b, "Rendering attivo: %.2fx | Cambi di risoluzione effettivi al prossimo avvio.", g_render_scale);
     v.note = b;
     return v;
 }
