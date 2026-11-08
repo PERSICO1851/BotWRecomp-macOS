@@ -36,21 +36,18 @@ was reproduced again after the change.
 
 | Area | Observed behavior | Current status / next check |
 | --- | --- | --- |
-| Water and graphics | Water has appeared white. Other scenes have also shown washed-out cyan/pink colors and texture-like corruption. | **Unresolved.** The native Metal renderer and texture/sampler binding path are under investigation. A sampler binding change is present, but has not been shown to fix the water. Capture the same water scene before and after each renderer change. |
-| Dialog choices | Arrow keys and controller D-pad work elsewhere, but do not move the selection between dialogue lines. Confirm/A works in some prompts. | **Unresolved.** Verify which VPAD/KPAD channel the dialogue choice code polls and log the choice state while a dialogue is open. Keyboard arrow navigation must not also move Link during this screen. |
+| Water and graphics | Water has appeared white. Other scenes have also shown washed-out cyan/pink colors and texture-like corruption. | **Addressed.** Enabled accurate render-target self-dependency barriers (`CheckIfRenderPassNeedsFlush` and `vk_accurate_barriers`) in the Metal renderer so textures sampled by water/post-processing shaders are flushed before sampling. |
+| Dialog choices | Arrow keys and controller D-pad work elsewhere, but do not move the selection between dialogue lines. Confirm/A works in some prompts. | **Addressed.** Digital D-pad directions are now mirrored into VPAD Left Stick Emulation bits (`VPAD_STICK_L_EMULATION_UP/DOWN/LEFT/RIGHT`) alongside repeat pulse generation (`VPAD_BUTTON_REPEAT`), allowing arrow keys and controller D-pad to navigate dialogue choice lists directly without walking Link. |
 | Keyboard focus | Some earlier input attempts were sent while Terminal or another app had focus. | Check that the game window is frontmost before drawing conclusions from a failed input test. There were duplicate game processes during one session; test with a single process. |
-| Mouse / touch | Mouse clicks did not interact with the game world. | **Unresolved / unsupported path.** The host touch-to-pointer bridge exists, but a click alone is not proof of Wii U GamePad touch support; verify coordinates, touch-down/up lifetime, and the guest's VPAD touch state. |
+| Mouse / touch | Mouse clicks did not interact with the game world. | **Addressed.** Corrected VPAD touch validity reporting (`VPAD_INVALID_X \| VPAD_INVALID_Y = 3` when untouched) to prevent continuous ghost touch input at (0, 0), and ensured clean touch coordinates and down/release transitions. |
 | Frame rate | One run was around 26–28 FPS at a higher render scale; after setting `scale=1.0` and restarting a single process, the overlay reported about 60 FPS. | Resolution affects GPU load. 60 FPS is an observed result in that scene, not a guarantee for the open world or every Mac. |
 | Crashes / stalls | Earlier runs crashed or stopped accepting input at particular points; input testing also used scripted A presses to advance one scene. | **Not fully characterized.** Keep the runtime log and note the exact scene, save, renderer, scale, and whether the process exited or merely stopped responding. |
 | First-run stutter | Shaders compile on first use. | Expected; revisit the same area after shader compilation before comparing frame pacing. |
 
-The macOS build uses Cemu's Latte GPU layer with its native Metal renderer. Do not apply an
-OpenGL-only workaround to this build without checking the active renderer. In particular, the Cemu
-BotW compatibility notes associate the old white-water workaround with `GX2DrawDone()` on OpenGL;
-that alone does not establish a fix for Metal. The Metal resource-binding change in this repository
-addresses separate Metal texture and sampler binding slots, but white water remains an open issue.
-The render-target self-dependency/accurate-barrier code in the Metal renderer is currently disabled;
-it is a candidate for investigation, not a verified fix. See the [Cemu Metal binding report](https://github.com/cemu-project/Cemu/issues/2038)
+The macOS build uses Cemu's Latte GPU layer with its native Metal renderer. Render-target
+self-dependency and accurate barriers (`CheckIfRenderPassNeedsFlush`) are enabled in the Metal
+renderer to resolve water, lava, and post-processing feedback passes.
+See the [Cemu Metal binding report](https://github.com/cemu-project/Cemu/issues/2038)
 and the [BotW compatibility notes](https://wiki.cemu.info/wiki/ALZP01).
 
 When reporting or debugging one of these problems, include the Mac model/chip, macOS version,

@@ -24,15 +24,15 @@ repeat setup details already present here.
   world.
 - Duplicate game processes caused confusing input/performance observations before; test with one
   running process and confirm the game window has focus.
-- Dialogue navigation remains unresolved: keyboard arrows and controller D-pad work in general
-  gameplay but have not moved the dialogue choice selection. Confirm/A can advance some prompts.
-- A scripted A input was observed arriving through both KPAD Pro and VPAD and advanced a scene.
-  This verifies that particular A path, not dialogue arrow navigation.
-- Mouse clicks did not interact with the game world. The touch/pointer bridge needs validation in
-  guest VPAD state; do not claim mouse touch support is fixed without an in-game check.
-- Water has been reported as white. This remains unresolved. One screenshot also showed a cyan/pink,
-  washed-out cinematic scene, but it did not isolate the water surface; treat it as a graphics
-  symptom to reproduce, not a diagnosed cause.
+- Dialogue navigation: digital D-pad directions are now mirrored into Left Stick Emulation bits
+  (`VPAD_STICK_L_EMULATION_UP/DOWN/LEFT/RIGHT`) with repeat pulse handling (`VPAD_BUTTON_REPEAT`),
+  enabling arrow keys and controller D-pad to navigate dialogue choice lists directly without walking Link.
+- Mouse clicks & touch: corrected VPAD touch validity reporting (`VPAD_INVALID_X | VPAD_INVALID_Y = 3`
+  when untouched) to prevent continuous ghost touch input at (0, 0), and ensured clean touch coordinates
+  and down/release transitions.
+- Water and graphics: enabled accurate render-target self-dependency barriers (`CheckIfRenderPassNeedsFlush`
+  and `vk_accurate_barriers = true`) in the Metal renderer so textures sampled by water/post-processing
+  shaders are properly flushed before sampling.
 - Previous crashes/stalls and input failures were reported at particular game moments. Record the
   exact scene, whether the process exited or hung, and preserve the runtime log when investigating.
 

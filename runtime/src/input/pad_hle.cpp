@@ -37,16 +37,47 @@ HLE_EXPORT(vpad, VPADRead) {
         return b;
     };
     hold |= stick_bits(s.lx, s.ly, 0x08000000) | stick_bits(s.rx, s.ry, 0x00800000);
+    // Mirror digital D-Pad to Left Stick Emulation bits so that UI lists and dialogue choices
+    // navigate directly from D-pad or arrow keys without needing analog stick movement.
+    if (s.buttons & input::BTN_UP)    hold |= 0x10000000; // VPAD_STICK_L_EMULATION_UP
+    if (s.buttons & input::BTN_DOWN)  hold |= 0x08000000; // VPAD_STICK_L_EMULATION_DOWN
+    if (s.buttons & input::BTN_LEFT)  hold |= 0x40000000; // VPAD_STICK_L_EMULATION_LEFT
+    if (s.buttons & input::BTN_RIGHT) hold |= 0x20000000; // VPAD_STICK_L_EMULATION_RIGHT
+
+    // Compute trigger and release based on hold transitions from the guest's perspective,
+    // combined with host edge pulses so rapid keypresses are never dropped.
+    uint32_t trigger = (hold & ~g_last_vpad_hold) | s.pressed;
+    uint32_t release = (g_last_vpad_hold & ~hold) | s.released;
+
+    // Handle repeat pulses for directional navigation (D-pad & stick emulation):
+    // When held, emit repeat trigger events with the VPAD_BUTTON_REPEAT flag (0x80000000).
+    static uint32_t s_repeat_buttons = 0;
+    static int s_repeat_timer = 0;
+    constexpr int REPEAT_DELAY = 24;  // ~400ms at 60fps
+    constexpr int REPEAT_RATE = 6;    // ~100ms
+    uint32_t nav_held = hold & (0x78000000 | input::BTN_UP | input::BTN_DOWN | input::BTN_LEFT | input::BTN_RIGHT);
+    if (nav_held && nav_held == s_repeat_buttons) {
+        s_repeat_timer++;
+        if (s_repeat_timer >= REPEAT_DELAY && ((s_repeat_timer - REPEAT_DELAY) % REPEAT_RATE == 0)) {
+            trigger |= nav_held | 0x80000000; // VPAD_BUTTON_REPEAT
+        }
+    } else {
+        s_repeat_buttons = nav_held;
+        s_repeat_timer = 0;
+    }
+
     if (hold != g_last_vpad_hold || s.touch_down != g_last_touch) {
         LOG("input probe VPAD: hold=%08x trigger=%08x release=%08x L=%+.2f,%+.2f touch=%d @%u,%u", hold,
-            s.pressed, s.released, s.lx, s.ly, s.touch_down, (unsigned)(s.touch_x * 1280),
+            trigger, release, s.lx, s.ly, s.touch_down, (unsigned)(s.touch_x * 1280),
             (unsigned)(s.touch_y * 720));
         g_last_vpad_hold = hold;
         g_last_touch = s.touch_down;
+    } else {
+        g_last_vpad_hold = hold;
     }
     mem::w32(buf + 0x00, hold);
-    mem::w32(buf + 0x04, s.pressed);
-    mem::w32(buf + 0x08, s.released);
+    mem::w32(buf + 0x04, trigger);
+    mem::w32(buf + 0x08, release);
     wf(buf + 0x0C, s.lx);
     wf(buf + 0x10, s.ly);
     wf(buf + 0x14, s.rx);
@@ -73,11 +104,12 @@ HLE_EXPORT(vpad, VPADRead) {
     const uint16_t tx = (uint16_t)std::clamp(s.touch_x * 1280.0f, 0.0f, 1279.0f);
     const uint16_t ty = (uint16_t)std::clamp(s.touch_y * 720.0f, 0.0f, 719.0f);
     // VPAD touch samples: normal, first filtered and second filtered coordinates.
+    // Validity: 0 = valid touch, 3 = invalid touch (VPAD_INVALID_X | VPAD_INVALID_Y)
     for (uint32_t off : {0x52u, 0x5Au, 0x62u}) {
         mem::w16(buf + off, tx);
         mem::w16(buf + off + 2, ty);
         mem::w16(buf + off + 4, s.touch_down ? 1 : 0);
-        mem::w16(buf + off + 6, 0);  // valid sample
+        mem::w16(buf + off + 6, s.touch_down ? 0 : 3);
     }
     mem::w8(buf + 0xA0, 0x40);  // slide volume
     mem::w8(buf + 0xA1, 6);     // battery full

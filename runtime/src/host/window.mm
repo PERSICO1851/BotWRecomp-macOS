@@ -100,17 +100,8 @@ void apply_input() {
     input::PadState s;
     const bool* keys = SDL_GetKeyboardState(nullptr);
     if (g_win && (SDL_GetWindowFlags(g_win) & SDL_WINDOW_INPUT_FOCUS)) {
-        const bool dialogue_nav = keys[SDL_SCANCODE_LALT] || keys[SDL_SCANCODE_RALT];
         for (auto& k : kKeys) {
-            const bool direction = k.button == input::BTN_UP || k.button == input::BTN_DOWN ||
-                                   k.button == input::BTN_LEFT || k.button == input::BTN_RIGHT;
-            if (keys[k.sc] && !(dialogue_nav && direction)) s.buttons |= k.button;
-        }
-        // Alt/Option + arrows is an explicit analog navigation layer for dialogue lists.
-        // Plain arrows remain D-pad only so they cannot walk Link or steal weapon-menu input.
-        if (dialogue_nav) {
-            s.lx += (keys[SDL_SCANCODE_RIGHT] ? 1.0f : 0.0f) - (keys[SDL_SCANCODE_LEFT] ? 1.0f : 0.0f);
-            s.ly += (keys[SDL_SCANCODE_UP] ? 1.0f : 0.0f) - (keys[SDL_SCANCODE_DOWN] ? 1.0f : 0.0f);
+            if (keys[k.sc]) s.buttons |= k.button;
         }
         if (keys[SDL_SCANCODE_A]) s.lx -= 1;
         if (keys[SDL_SCANCODE_D]) s.lx += 1;
