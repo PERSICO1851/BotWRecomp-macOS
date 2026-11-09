@@ -36,7 +36,7 @@ was reproduced again after the change.
 
 | Area | Observed behavior | Current status / next check |
 | --- | --- | --- |
-| Water and graphics | Water has appeared white. Other scenes have also shown washed-out cyan/pink colors and texture-like corruption. | **Addressed.** Enabled accurate render-target self-dependency barriers (`CheckIfRenderPassNeedsFlush` and `vk_accurate_barriers`) in the Metal renderer so textures sampled by water/post-processing shaders are flushed before sampling. |
+| Water and graphics | Water had appeared white. Other scenes have also shown washed-out cyan/pink colors and texture-like corruption. | **Water fix verified in game.** Metal depth-to-color surface copies now select the requested mip and slice. Other reported graphics corruption remains to be checked independently. |
 | Dialog choices | Arrow keys and controller D-pad work elsewhere, but do not move the selection between dialogue lines. Confirm/A works in some prompts. | **Addressed.** Digital D-pad directions are now mirrored into VPAD Left Stick Emulation bits (`VPAD_STICK_L_EMULATION_UP/DOWN/LEFT/RIGHT`) alongside repeat pulse generation (`VPAD_BUTTON_REPEAT`), allowing arrow keys and controller D-pad to navigate dialogue choice lists directly without walking Link. |
 | Keyboard focus | Some earlier input attempts were sent while Terminal or another app had focus. | Check that the game window is frontmost before drawing conclusions from a failed input test. There were duplicate game processes during one session; test with a single process. |
 | Mouse / touch | Mouse clicks did not interact with the game world. | **Addressed.** Corrected VPAD touch validity reporting (`VPAD_INVALID_X \| VPAD_INVALID_Y = 3` when untouched) to prevent continuous ghost touch input at (0, 0), and ensured clean touch coordinates and down/release transitions. |
@@ -46,7 +46,9 @@ was reproduced again after the change.
 
 The macOS build uses Cemu's Latte GPU layer with its native Metal renderer. Render-target
 self-dependency and accurate barriers (`CheckIfRenderPassNeedsFlush`) are enabled in the Metal
-renderer to resolve water, lava, and post-processing feedback passes.
+renderer. In-game verification confirmed that selecting the requested mip and slice in Metal
+depth-to-color surface copies fixes the white water. This does not establish a fix for other
+reported graphics corruption, lava, or all post-processing feedback passes.
 See the [Cemu Metal binding report](https://github.com/cemu-project/Cemu/issues/2038)
 and the [BotW compatibility notes](https://wiki.cemu.info/wiki/ALZP01).
 

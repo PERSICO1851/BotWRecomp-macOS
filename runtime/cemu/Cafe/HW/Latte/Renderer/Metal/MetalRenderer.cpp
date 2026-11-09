@@ -1037,6 +1037,17 @@ void MetalRenderer::surfaceCopy_copySurfaceWithFormatConversion(LatteTexture* so
             }
         }
 
+        // Restrict the source view to the requested mip and slice. Binding the
+        // base texture here silently reads mip 0 / slice 0 for every surface copy.
+        auto sourceView = srcMtl->GetTexture()->newTextureView(
+            srcMtl->GetTexture()->pixelFormat(), MTL::TextureType2D,
+            NS::Range::Make(srcMip, 1), NS::Range::Make(srcSlice, 1));
+        if (!sourceView)
+        {
+            renderPassDescriptor->release();
+            return;
+        }
+
         auto renderCommandEncoder = GetTemporaryRenderCommandEncoder(renderPassDescriptor);
         renderPassDescriptor->release();
 
@@ -1045,11 +1056,12 @@ void MetalRenderer::surfaceCopy_copySurfaceWithFormatConversion(LatteTexture* so
             renderCommandEncoder->setRenderPipelineState(pipeline);
             renderCommandEncoder->setViewport(MTL::Viewport{0.0, 0.0, (double)effectiveCopyWidth, (double)effectiveCopyHeight, 0.0, 1.0});
             renderCommandEncoder->setScissorRect(MTL::ScissorRect{0, 0, (uint32)effectiveCopyWidth, (uint32)effectiveCopyHeight});
-            renderCommandEncoder->setFragmentTexture(srcMtl->GetTexture(), GET_HELPER_TEXTURE_BINDING(0));
+            renderCommandEncoder->setFragmentTexture(sourceView, GET_HELPER_TEXTURE_BINDING(0));
             sint32 vpWidth = effectiveCopyWidth;
             renderCommandEncoder->setFragmentBytes(&vpWidth, sizeof(sint32), GET_HELPER_BUFFER_BINDING(0));
             renderCommandEncoder->drawPrimitives(MTL::PrimitiveTypeTriangle, NS::UInteger(0), NS::UInteger(3));
         }
+        sourceView->release();
         EndEncoding();
         return;
     }
