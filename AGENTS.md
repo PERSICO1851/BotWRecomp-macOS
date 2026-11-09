@@ -20,8 +20,8 @@ repeat setup details already present here.
 - Local executable: `build/BotWRecomp`.
 - User config: `~/Library/Application Support/BotWRecomp/settings.ini`.
 - The config was set to `scale=1.0`. One process rendered at about 60 FPS in the tested scene; a
-  previous run at a higher scale was around 26–28 FPS. Do not assume 60 FPS throughout the open
-  world.
+  previous run at a higher scale was around 26–28 FPS. These are scene-specific observations, not
+  expected frame rates for the whole open world.
 - Duplicate game processes caused confusing input/performance observations before; test with one
   running process and confirm the game window has focus.
 - Dialogue navigation: digital D-pad directions are now mirrored into Left Stick Emulation bits
@@ -30,9 +30,15 @@ repeat setup details already present here.
 - Mouse clicks & touch: corrected VPAD touch validity reporting (`VPAD_INVALID_X | VPAD_INVALID_Y = 3`
   when untouched) to prevent continuous ghost touch input at (0, 0), and ensured clean touch coordinates
   and down/release transitions.
-- Water and graphics: enabled accurate render-target self-dependency barriers (`CheckIfRenderPassNeedsFlush`
-  and `vk_accurate_barriers = true`) in the Metal renderer so textures sampled by water/post-processing
-  shaders are properly flushed before sampling.
+- Water: the white-water repro was fixed and verified in game by restricting Metal depth-to-color
+  surface copies to the requested source mip and slice. The relevant code is in
+  `MetalRenderer.cpp::surfaceCopy_copySurfaceWithFormatConversion`.
+- Render-target feedback: Metal has `CheckIfRenderPassNeedsFlush`; accurate barriers run when
+  `vk_accurate_barriers` is enabled, with forced handling for known BotW lava and waterfall-foam
+  shaders. Do not describe the option as unconditionally enabled; check its current default and
+  preserve the special cases when investigating it.
+- Other graphics reports: washed-out cyan/pink colors and texture-like corruption remain separate,
+  unresolved observations. The water fix does not establish a fix for these issues.
 - Previous crashes/stalls and input failures were reported at particular game moments. Record the
   exact scene, whether the process exited or hung, and preserve the runtime log when investigating.
 
@@ -40,31 +46,31 @@ repeat setup details already present here.
 
 - `runtime/cemu/Cafe/HW/Latte/LegacyShaderDecompiler/LatteDecompilerEmitMSLHeader.hpp`,
   `LatteDecompilerEmitMSL.cpp`, and `runtime/cemu/Cafe/HW/Latte/Renderer/Metal/MetalRenderer.cpp`
-  contain local changes to separate Metal texture slots from sampler slots. This was motivated by
+  contain changes to separate Metal texture slots from sampler slots. This was motivated by
   [Cemu issue #2038](https://github.com/cemu-project/Cemu/issues/2038), which describes BotW
-  shaders using more than 16 textures while remaining within the sampler limit. The change is not
-  verified as a fix for white water.
-- The Metal render-target self-dependency / accurate-barrier block and
-  `CheckIfRenderPassNeedsFlush` implementation in `MetalRenderer.cpp` are commented out. The block
-  includes special cases labelled for BotW lava and waterfall foam. It is a lead for investigation,
-  not an established safe fix; inspect why it was disabled and test carefully before enabling it.
+  shaders using more than 16 textures while remaining within the sampler limit. Treat that change
+  as a binding compatibility fix; do not conflate it with the verified depth-copy water fix.
+- The Metal render-target self-dependency handling and `CheckIfRenderPassNeedsFlush` implementation
+  are present in `MetalRenderer.cpp`. The normal path is gated by `vk_accurate_barriers`; known BotW
+  lava and waterfall-foam pixel shaders force the flush. Inspect backend semantics and configuration
+  before changing this behavior.
 - Do not apply an OpenGL-only `GX2DrawDone()` workaround to native Metal without checking the
   backend semantics. The Cemu [BotW compatibility notes](https://wiki.cemu.info/wiki/ALZP01)
   mention that workaround in the OpenGL context.
 - The Metal synchronized ring allocator already clears its remembered command-buffer pointer when
   a command buffer finishes. Do not reapply that fix blindly; inspect the current allocator first.
 
-## Work already in the working tree
+## Preserving repository work
 
-Before changing or resetting anything, inspect `git status`. At the time these notes were written,
-the user's uncommitted work included:
+Before changing or resetting anything, inspect `git status`. Previous user work has included:
 
 - Metal texture/sampler binding changes.
 - Keyboard/controller input and KPAD changes, touch/pointer handling, and window/menu work.
 - In-game menu, settings and overlay changes.
 - H.264 runtime support (`runtime/src/misc/h264_hle.cpp`).
 - Mac app icon assets and helper scripts.
-- README updates and `tools/play.sh` changes.
+- README updates and `tools/play.sh` changes. These changes may since have been committed; never
+  infer that the working tree is disposable from a clean status.
 
 Preserve all of this unless the user explicitly asks to discard it. Do not reset, clean, or overwrite
 the user's changes. Check whether the current executable was rebuilt after source changes before

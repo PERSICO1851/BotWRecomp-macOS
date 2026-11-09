@@ -44,11 +44,12 @@ was reproduced again after the change.
 | Crashes / stalls | Earlier runs crashed or stopped accepting input at particular points; input testing also used scripted A presses to advance one scene. | **Not fully characterized.** Keep the runtime log and note the exact scene, save, renderer, scale, and whether the process exited or merely stopped responding. |
 | First-run stutter | Shaders compile on first use. | Expected; revisit the same area after shader compilation before comparing frame pacing. |
 
-The macOS build uses Cemu's Latte GPU layer with its native Metal renderer. Render-target
-self-dependency and accurate barriers (`CheckIfRenderPassNeedsFlush`) are enabled in the Metal
-renderer. In-game verification confirmed that selecting the requested mip and slice in Metal
+The macOS build uses Cemu's Latte GPU layer with its native Metal renderer. The renderer includes
+render-target self-dependency checks (`CheckIfRenderPassNeedsFlush`): the normal path is controlled
+by Cemu's accurate-barriers setting, while known BotW lava and waterfall-foam shaders force a flush.
+Separately, in-game verification confirmed that selecting the requested mip and slice in Metal
 depth-to-color surface copies fixes the white water. This does not establish a fix for other
-reported graphics corruption, lava, or all post-processing feedback passes.
+reported graphics corruption or every post-processing feedback pass.
 See the [Cemu Metal binding report](https://github.com/cemu-project/Cemu/issues/2038)
 and the [BotW compatibility notes](https://wiki.cemu.info/wiki/ALZP01).
 
